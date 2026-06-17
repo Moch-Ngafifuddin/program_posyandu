@@ -207,53 +207,59 @@ class DatabaseBalitaResource extends Resource
                     ->label('No')
                     ->rowIndex()
                     ->alignCenter(),
-
+            
                 Tables\Columns\TextColumn::make('nik')
                     ->label('NIK')
-                    ->searchable()
+                    ->searchable(query: function ($query, $search) {
+                        // Mempertahankan logika pencarian NIK terenkripsi di latar belakang
+                        $query->orWhere('nik_hash', hash_hmac('sha256', $search, config('app.key')));
+                    })
                     ->fontFamily('mono'),
-
+            
                 Tables\Columns\TextColumn::make('nama')
                     ->label('Nama Lengkap')
                     ->searchable()
                     ->weight('semibold'),
-
+            
                 Tables\Columns\TextColumn::make('jenis_kelamin')
                     ->label('JK')
                     ->alignCenter(),
-
+            
                 Tables\Columns\TextColumn::make('tgl_lahir')
                     ->label('Tgl Lahir')
                     ->date('d-m-Y'),
-
+            
                 Tables\Columns\TextColumn::make('nama_ibu')
                     ->label('Nama Ibu')
                     ->searchable(),
 
-                Tables\Columns\TextColumn::make('prov')
+            
+                // 🟢 SINKRONISASI UTAMA: Mengambil data wilayah langsung dari relasi master_posyandu milik pasien
+                Tables\Columns\TextColumn::make('posyandu.provinsi')
                     ->label('Prov')
-                    ->state(fn () => auth()->user()?->provinsi ?? '-'),
-
-                Tables\Columns\TextColumn::make('kab_kota')
+                    ->placeholder('-'),
+            
+                Tables\Columns\TextColumn::make('posyandu.kabupaten_kota')
                     ->label('Kab/Kota')
-                    ->state(fn () => auth()->user()?->kabupaten_kota ?? '-'),
-
-                Tables\Columns\TextColumn::make('kec')
+                    ->placeholder('-'),
+            
+                Tables\Columns\TextColumn::make('posyandu.kecamatan')
                     ->label('Kec')
-                    ->state(fn () => auth()->user()?->kecamatan ?? '-'),
-
-                Tables\Columns\TextColumn::make('puskesmas')
+                    ->placeholder('-'),
+            
+                Tables\Columns\TextColumn::make('posyandu.nama_puskesmas')
                     ->label('Puskesmas')
-                    ->state(fn () => auth()->user()?->nama_puskesmas ?? '-'),
-
-                Tables\Columns\TextColumn::make('desa_kel')
+                    ->placeholder('-'),
+            
+                Tables\Columns\TextColumn::make('posyandu.desa_kelurahan')
                     ->label('Desa/Kel')
-                    ->state(fn () => auth()->user()?->desa_kelurahan ?? '-'),
-
-                Tables\Columns\TextColumn::make('posyandu')
+                    ->placeholder('-'),
+            
+                Tables\Columns\TextColumn::make('posyandu.nama_posyandu')
                     ->label('Posyandu')
-                    ->state(fn () => auth()->user()?->nama_posyandu ?? '-'),
+                    ->placeholder('-'),
             ])
+
             ->filters([
 
                 SelectFilter::make('status_gizi')

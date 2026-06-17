@@ -202,7 +202,145 @@ class PasienResource extends Resource
                 Tables\Columns\TextColumn::make('tgl_lahir')->label('Tanggal Lahir')->date('d M Y'),
                 Tables\Columns\TextColumn::make('nama_ibu')->label('Nama Ibu')->searchable(),
             ])
-            ->actions([Tables\Actions\EditAction::make()]);
+            ->actions([
+                Tables\Actions\EditAction::make()
+                    ->label('Edit')
+                    ->icon('heroicon-o-pencil-square')
+                    ->color('success')
+                    ->modalHeading('Ubah Identitas Utama Balita')
+                    ->modalWidth('2xl')
+                    
+                    // 1. Fungsi penarik data dari sub-tabel saat modal pertama kali diklik/dibuka
+                    ->mountUsing(function (Forms\ComponentContainer $form, Pasien $record) {
+                        $riwayat = $record->riwayatKelahiran;
+                        
+                        $form->fill([
+                            'nama' => $record->nama,
+                            'jenis_kelamin' => $record->jenis_kelamin,
+                            'tgl_lahir' => $record->tgl_lahir,
+                            'tempat_lahir' => $record->tempat_lahir,
+                            'alamat' => $record->alamat,
+                            'rt' => $record->rt,
+                            'rw' => $record->rw,
+                            'no_hp' => $record->no_hp,
+                            'nama_wali' => $record->nama_wali,
+                            'nama_ayah' => $record->nama_ayah,
+                            'nik_ayah' => $record->nik_ayah,
+                            'pendidikan_pekerjaan_ayah' => $record->pendidikan_pekerjaan_ayah,
+                            'nama_ibu' => $record->nama_ibu,
+                            'nik_ibu' => $record->nik_ibu,
+                            'pendidikan_pekerjaan_ibu' => $record->pendidikan_pekerjaan_ibu,
+                            
+                            // Ambil data dari sub-tabel riwayat_kelahiran dan masukkan ke form
+                            'anak_ke' => $riwayat?->anak_ke,
+                            'usia_kehamilan' => $riwayat?->usia_kehamilan,
+                            'berat_lahir' => $riwayat?->berat_lahir,
+                            'panjang_lahir' => $riwayat?->panjang_lahir,
+                            'lingkar_kepala_lahir' => $riwayat?->lingkar_kepala_lahir,
+                            'imd' => $riwayat?->imd ?? 0,
+                            'riwayat_asi' => $riwayat?->riwayat_asi,
+                        ]);
+                    })
+                    
+                    // 2. Fungsi pembagian data ke masing-masing tabel saat tombol simpan diklik
+                    ->using(function (Pasien $record, array $data): Pasien {
+                        // Update data utama pada tabel pasien
+                        $record->update(collect($data)->only([
+                            'nama', 'jenis_kelamin', 'tgl_lahir', 'tempat_lahir', 
+                            'alamat', 'rt', 'rw', 'no_hp', 'nama_wali', 
+                            'nama_ayah', 'nik_ayah', 'pendidikan_pekerjaan_ayah', 
+                            'nama_ibu', 'nik_ibu', 'pendidikan_pekerjaan_ibu'
+                        ])->toArray());
+
+                        // Update atau buat baru data medis pada tabel pasien_riwayat_kelahiran
+                        $record->riwayatKelahiran()->updateOrCreate(
+                            ['pasien_id' => $record->id],
+                            collect($data)->only([
+                                'anak_ke', 'usia_kehamilan', 'berat_lahir', 
+                                'panjang_lahir', 'lingkar_kepala_lahir', 'imd', 'riwayat_asi'
+                            ])->toArray()
+                        );
+
+                        return $record;
+                    }),
+
+                // 🟢 HAPUS/ARSIP ACTION (Pencatatan dialihkan ke tabel pasien_kondisi_khusus)
+                Tables\Actions\Action::make('hapus_atau_arsip')
+                    ->label('Hapus')
+                    ->icon('heroicon-o-trash')
+                    ->color('danger')
+                    ->modalHeading(fn (Pasien $record) => "Manajemen Status Data: {$record->nama}")
+                    ->modalWidth('md')
+                    ->modalSubmitActionLabel('Konfirmasi & Simpan')
+                    ->form([
+                        Forms\Components\Select::make('status_tindakan')
+                            ->label('Alasan Penghapusan / Pengarsipan')
+                            ->options([
+                                'salah_input' => 'Salah Input (Hapus Permanen)',
+                                'pindah' => 'Pindah Domisili / Wilayah (Arsipkan)',
+                                'meninggal' => 'Meninggal Dunia (Arsipkan)',
+                            ])
+                            ->required()
+                            ->live(),
+
+                        Forms\Components\Placeholder::make('peringatan_salah_input')
+                            ->label('⚠️ PERINGATAN KRITIS')
+                            ->content('Data balita beserta seluruh riwayat pemeriksaan bulanan akan DIHAPUS PERMANEN dari database.')
+                            ->visible(fn (Forms\Get $get) => $get('status_tindakan') === 'salah_input'),
+
+                        Forms\Components\Textarea::make('keterangan_pindah')
+                            ->label('Keterangan Pindah')
+                            ->required()
+                            ->visible(fn (Forms\Get $get) => $get('status_tindakan') === 'pindah'),
+
+                        Forms\Components\DatePicker::make('tgl_meninggal')
+                            ->label('Tanggal Meninggal')
+                            ->required()
+                            ->maxDate(now())
+                            ->visible(fn (Forms\Get $get) => $get('status_tindakan') === 'meninggal'),
+
+                        Forms\Components\TextInput::make('tempat_pemakaman')
+                            ->label('Tempat Pemakaman')
+                            ->required()
+                            ->visible(fn (Forms\Get $get) => $get('status_tindakan') === 'meninggal'),
+
+                        Forms\Components\TextInput::make('penyebab_meninggal')
+                            ->label('Penyebab meninggal')
+                            ->required()
+                            ->visible(fn (Forms\Get $get) => $get('status_tindakan') === 'meninggal'),
+                    ])
+                    ->action(function (Pasien $record, array $data) {
+                        switch ($data['status_tindakan']) {
+                            case 'salah_input':
+                                $record->delete();
+                                \Filament\Notifications\Notification::make()->title('Berhasil Dihapus secara permanen.')->success()->send();
+                                break;
+
+                            case 'pindah':
+                                $record->update(['is_arsip' => 1]);
+                                $record->kondisiKhusus()->updateOrCreate(
+                                    ['pasien_id' => $record->id],
+                                    ['keterangan_pindah' => $data['keterangan_pindah']]
+                                );
+                                \Filament\Notifications\Notification::make()->title('Balita dipindahkan ke arsip pindah domisili.')->success()->send();
+                                break;
+
+                            case 'meninggal':
+                                $record->update(['is_arsip' => 1]);
+                                $record->kondisiKhusus()->updateOrCreate(
+                                    ['pasien_id' => $record->id],
+                                    [
+                                        'tgl_meninggal' => $data['tgl_meninggal'],
+                                        'tempat_pemakaman' => $data['tempat_pemakaman'],
+                                        'penyebab_meninggal' => $data['penyebab_meninggal'],
+                                    ]
+                                );
+                                \Filament\Notifications\Notification::make()->title('Balita dipindahkan ke arsip meninggal dunia.')->success()->send();
+                                break;
+                        }
+                    }),
+            ])
+            ->bulkActions([]);
     }
 
     public static function getPages(): array

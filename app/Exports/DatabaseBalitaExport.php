@@ -2,76 +2,103 @@
 
 namespace App\Exports;
 
-use Maatwebsite\Excel\Concerns\FromCollection;
+use App\Models\PemeriksaanBayi;
+use Maatwebsite\Excel\Concerns\FromQuery;
 use Maatwebsite\Excel\Concerns\WithHeadings;
 use Maatwebsite\Excel\Concerns\WithMapping;
-use Maatwebsite\Excel\Concerns\WithStyles; 
-use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
+use Illuminate\Database\Eloquent\Builder;
 
-class DatabaseBalitaExport implements FromCollection, WithHeadings, WithMapping, WithStyles
+class DatabaseBalitaExport implements FromQuery, WithHeadings, WithMapping
 {
-    protected $records;
+    protected $posyanduId;
 
-    public function __construct($records)
+    public function __0construct($posyanduId = null)
     {
-        $this->records = $records;
+        $this->posyanduId = $posyanduId;
     }
 
-    public function collection()
+    /**
+     * 🟢 SINKRON: Mengambil query pemeriksaan lengkap dengan Eager Loading relasi baru
+     */
+    public function query()
     {
-        return $this->records;
+        $query = PemeriksaanBayi::query()->with(['pasien.posyandu', 'intervensiKlinis']);
+
+        // Jika user yang login adalah admin posyandu tertentu, filter berdasarkan posyandu mereka
+        if ($this->posyanduId) {
+            $query->whereHas('pasien', function (Builder $q) {
+                $q->where('posyandu_id', $this->posyanduId);
+            });
+        }
+
+        return $query;
     }
 
+    /**
+     * Menentukan judul kolom pada file Excel
+     */
     public function headings(): array
     {
         return [
             'No',
             'NIK Balita',
-            'Nama Lengkap',
-            'JK',
+            'Nama Balita',
+            'Jenis Kelamin',
             'Tanggal Lahir',
-            'Nama Ortu (Ibu)',
-            'Kategori Gizi (BB/U)', 
-            'Kategori Stunting (TB/U)', 
+            'Nama Ibu',
             'Provinsi',
-            'Kab/Kota',
+            'Kabupaten/Kota',
             'Kecamatan',
             'Puskesmas',
-            'Desa/Kel',
-            'Posyandu',
+            'Desa/Kelurahan',
+            'Nama Posyandu',
+            'Usia (Bulan)',
+            'Berat Badan (Kg)',
+            'Tinggi Badan (Cm)',
+            'Status Gizi (BB/U)',
+            'Status Stunting (TB/U)',
+            'Vitamin A',
+            'Obat Cacing',
         ];
     }
 
+    /**
+     * 🟢 SINKRON: Memetakan baris data sesuai struktur database baru
+     */
     public function map($row): array
     {
-        static $no = 1;
+        static $rowNumber = 0;
+        $rowNumber++;
 
-        $tanggalLahir = $row->pasien?->tgl_lahir 
-            ? \Carbon\Carbon::parse($row->pasien->tgl_lahir)->format('d-m-Y') 
-            : '-';
+        $pasien = $row->pasien;
+        $posyandu = $pasien?->posyandu;
+        $intervensi = $row->intervensiKlinis;
 
         return [
-            $no++,
-            "'" . ($row->pasien?->nik ?? '-'), 
-            $row->pasien?->nama ?? '-',
-            $row->pasien?->jenis_kelamin ?? '-',
-            $tanggalLahir,
-            $row->pasien?->nama_ibu ?? '-',
-            $row->status_gizi ?? '-', 
+            $rowNumber,
+            $pasien?->nik ?? '-',
+            $pasien?->nama ?? '-',
+            $pasien?->jenis_kelamin ?? '-',
+            $pasien?->tgl_lahir ? \Carbon\Carbon::parse($pasien->tgl_lahir)->format('d-m-Y') : '-',
+            $pasien?->nama_ibu ?? '-',
+            
+            // Kolom wilayah diambil dari master_posyandu relasi pasien
+            $posyandu?->provinsi ?? '-',
+            $posyandu?->kabupaten_kota ?? '-',
+            $posyandu?->kecamatan ?? '-',
+            $posyandu?->nama_puskesmas ?? '-',
+            $posyandu?->desa_kelurahan ?? '-',
+            $posyandu?->nama_posyandu ?? '-',
+            
+            $row->usia_bulan ?? 0,
+            $row->berat_badan ?? 0,
+            $row->tinggi_badan ?? 0,
+            $row->status_gizi ?? '-',
             $row->status_stunting ?? '-',
-            $row->pasien?->provinsi ?? '-',
-            $row->pasien?->kabupaten ?? $row->pasien?->kab_kota ?? '-',
-            $row->pasien?->kecamatan ?? '-',
-            $row->pasien?->nama_puskesmas ?? '-', 
-            $row->pasien?->desa_kelurahan ?? '-', 
-            $row->pasien?->nama_posyandu ?? $row->pasien?->posyandu ?? '-',
-        ];
-    }
-
-    public function styles(Worksheet $sheet)
-    {
-        return [
-            1 => ['font' => ['bold' => true]],
+            
+            // Kolom intervensi diambil dari sub-tabel pemeriksaan_intervensi_klinis
+            $intervensi?->vitamin_a ? 'Ya' : 'Tidak',
+            $intervensi?->obat_cacing ? 'Ya' : 'Tidak',
         ];
     }
 }

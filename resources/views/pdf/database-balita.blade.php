@@ -146,22 +146,18 @@
                     <td class="font-mono">{{ $row->pasien?->nik ?? '-' }}</td>
                     <td class="text-left" style="font-weight: bold;">{{ $row->pasien?->nama ?? '-' }}</td>
                     <td>{{ $row->pasien?->jenis_kelamin ?? '-' }}</td>
-                    <td>{{ $row->pasien?->tgl_lahir ? \Carbon\Carbon::parse($row->pasien->tgl_lahir)->format('d-m-Y') : '-' }}</td>
-                    <td class="text-left">{{ $row->pasien?->nama_ibu ?? '-' }}</td>
-                    <td>{{ auth()->user()?->provinsi ?? '-' }}</td>
-                    <td>{{ auth()->user()?->kabupaten_kota ?? '-' }}</td>
-                    <td>{{ auth()->user()?->kecamatan ?? '-' }}</td>
-                    <td>{{ auth()->user()?->nama_puskesmas ?? '-' }}</td>
-                    <td>{{ auth()->user()?->desa_kelurahan ?? '-' }}</td>
-                    <td>{{ auth()->user()?->nama_posyandu ?? '-' }}</td>
+                    <td>{{ $row->pasien?->tgl_lahir ? \Carbon\\Carbon::parse($row->pasien->tgl_lahir)->format('d-m-Y') : '-' }}</td>
+                    <td class="text-left row-nama-ibu">{{ $row->pasien?->nama_ibu ?? '-' }}</td>
+                    
+                    <td>{{ $row->pasien?->posyandu?->provinsi ?? '-' }}</td>
+                    <td>{{ $row->pasien?->posyandu?->kabupaten_kota ?? '-' }}</td>
+                    <td>{{ $row->pasien?->posyandu?->kecamatan ?? '-' }}</td>
+                    <td>{{ $row->pasien?->posyandu?->nama_puskesmas ?? '-' }}</td>
+                    <td>{{ $row->pasien?->posyandu?->desa_kelurahan ?? '-' }}</td>
+                    <td>{{ $row->pasien?->posyandu?->nama_posyandu ?? '-' }}</td>
                 </tr>
             @empty
-                <tr>
-                    <td colspan="12" style="padding: 15px; font-style: italic; color: #666;">
-                        Tidak ada records data balita aktif yang ditemukan sesuai parameter filter.
-                    </td>
-                </tr>
-            @endforelse
+               @endforelse
         </tbody>
     </table>
 

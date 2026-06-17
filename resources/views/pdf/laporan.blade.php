@@ -238,22 +238,28 @@
         <tr>
             <td style="width: 25%;"><strong>Pemberian Vitamin A</strong></td>
             <td style="width: 5%;">:</td>
-            <td>{{ $pemeriksaanUtama->vitamin_a ? 'Sudah Diberikan' : 'Tidak Diberikan' }}</td>
+            <td>{{ ($pemeriksaanUtama->intervensiKlinis?->vitamin_a) ? 'Sudah Diberikan' : 'Tidak Diberikan' }}</td>
         </tr>
         <tr>
             <td><strong>Pemberian Obat Cacing</strong></td>
             <td>:</td>
-            <td>{{ $pemeriksaanUtama->obat_cacing ? 'Sudah Diberikan' : 'Tidak Diberikan' }}</td>
+            <td>{{ ($pemeriksaanUtama->intervensiKlinis?->obat_cacing) ? 'Sudah Diberikan' : 'Tidak Diberikan' }}</td>
         </tr>
         <tr>
             <td><strong>Jenis Imunisasi</strong></td>
             <td>:</td>
-            <td>{{ is_array($pemeriksaanUtama->jenis_imunisasi) ? implode(', ', $pemeriksaanUtama->jenis_imunisasi) : ($pemeriksaanUtama->jenis_imunisasi ?? '-') }}</td>
+            <td>
+                @if($pemeriksaanUtama->intervensiKlinis?->jenis_imunisasi)
+                    {{ is_array($pemeriksaanUtama->intervensiKlinis->jenis_imunisasi) ? implode(', ', $pemeriksaanUtama->intervensiKlinis->jenis_imunisasi) : $pemeriksaanUtama->intervensiKlinis->jenis_imunisasi }}
+                @else
+                    -
+                @endif
+            </td>
         </tr>
         <tr>
             <td><strong>Konseling/Catatan KIE</strong></td>
             <td>:</td>
-            <td style="font-style: italic; color: #555;">"{{ $pemeriksaanUtama->catatan ?? 'Anak sehat, lanjutkan pemberian protein hewani dan jaga pola kebersihan.' }}"</td>
+            <td>{{ $pemeriksaanUtama->intervensiKlinis?->catatan ?? '-' }}</td>
         </tr>
     </table>
 

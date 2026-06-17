@@ -4,17 +4,15 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class Pasien extends Model
 {
     protected $table = 'pasien';
 
     protected $fillable = [
-        'is_arsip',
-        'keterangan_pindah',
-        'tgl_meninggal',
-        'tempat_pemakaman',
-        'penyebab_meninggal',
+        'posyandu_id',
         'nik',
         'nik_hash',
         'no_kk',
@@ -25,12 +23,6 @@ class Pasien extends Model
         'alamat',
         'rt',
         'rw',
-        'provinsi',
-        'kabupaten',
-        'kecamatan',
-        'desa_kelurahan',
-        'nama_puskesmas',
-        'nama_posyandu',
         'no_hp',
         'nama_wali',
         'nama_ayah',
@@ -39,15 +31,7 @@ class Pasien extends Model
         'nama_ibu',
         'nik_ibu',
         'pendidikan_pekerjaan_ibu',
-        'anak_ke',
-        'usia_kehamilan',
-        'berat_lahir',
-        'panjang_lahir',
-        'lingkar_kepala_lahir',
-        'imd',
-        'riwayat_asi',
-        'buku_kia_bayi_kecil',
-        'tatalaksana_bblr',
+        'is_arsip',
     ];
     
     protected $casts = [
@@ -56,16 +40,32 @@ class Pasien extends Model
         'no_hp' => 'encrypted',
         'nik_ibu' => 'encrypted',
         'nik_ayah' => 'encrypted',
-        
     ];
-    protected $guarded = [];
+
+    // Relasi ke Master Posyandu
+    public function posyandu(): BelongsTo
+    {
+        return $this->belongsTo(MasterPosyandu::class, 'posyandu_id');
+    }
+
+    // Relasi ke Riwayat Kelahiran (Tabel Terpisah Baru)
+    public function riwayatKelahiran(): HasOne
+    {
+        return $this->hasOne(PasienRiwayatKelahiran::class, 'pasien_id');
+    }
+
+    // Relasi ke Kondisi Khusus (Tabel Terpisah Baru)
+    public function kondisiKhusus(): HasOne
+    {
+        return $this->hasOne(PasienKondisiKhusus::class, 'pasien_id');
+    }
 
     public function latestPemeriksaan(): HasOne
     {
         return $this->hasOne(PemeriksaanBayi::class, 'pasien_id')->latestOfMany('id');
     }
 
-    public function pemeriksaanBayi()
+    public function pemeriksaanBayi(): HasMany
     {
         return $this->hasMany(PemeriksaanBayi::class, 'pasien_id');
     }
@@ -75,6 +75,15 @@ class Pasien extends Model
         static::saving(function ($pasien) {
             if ($pasien->isDirty('nik')) {
                 $pasien->nik_hash = $pasien->nik ? hash_hmac('sha256', $pasien->nik, config('app.key')) : null;
+            }
+        });
+
+        static::addGlobalScope('posyandu_filter', function (\Illuminate\Database\Eloquent\Builder $builder) {
+            if (auth()->check()) {
+                $user = auth()->user();
+                if ($user->posyandu_id) {
+                    $builder->where('posyandu_id', $user->posyandu_id);
+                }
             }
         });
     }

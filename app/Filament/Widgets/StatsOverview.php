@@ -14,14 +14,11 @@ class StatsOverview extends BaseWidget
 
     protected function getStats(): array
     {
-
         $pemeriksaanTerbaruIds = PemeriksaanBayi::selectRaw('MAX(id) as id')
             ->groupBy('pasien_id')
             ->pluck('id');
 
-
         $totalBalitaAktif = Pasien::where('is_arsip', 0)->count();
-
 
         $metrics = PemeriksaanBayi::whereIn('id', $pemeriksaanTerbaruIds)
             ->selectRaw("
@@ -32,7 +29,8 @@ class StatsOverview extends BaseWidget
                 SUM(CASE WHEN status_stunting IN ('Sangat Pendek (Severely Stunted)', 'Pendek (Stunted)') THEN 1 ELSE 0 END) as stunting
             ")->first();
 
-        $resourceUrl = PemeriksaanBayiResource::getUrl('index');
+        // REVISI SINKRONISASI: Menggunakan route name bawaan PasienResource yang valid di Laravel
+        $routePasien = 'filament.admin.resources.pasiens.index';
 
         return [
             // 1. STATISTIK TOTAL BALITA AKTIF
@@ -40,14 +38,14 @@ class StatsOverview extends BaseWidget
                 ->description('Semua balita terdaftar aktif')
                 ->descriptionIcon('heroicon-m-user-group')
                 ->color('info')
-                ->url(route('filament.admin.resources.database-balitas.index')),
+                ->url(route($routePasien)),
         
             // 2. STATISTIK BALITA STUNTING
             Stat::make('Balita Stunting', ($metrics->stunting ?? 0) . ' Anak')
                 ->description('Kategori Pendek & Sangat Pendek')
                 ->descriptionIcon('heroicon-m-arrow-trending-up')
                 ->color(($metrics->stunting ?? 0) > 0 ? 'danger' : 'success')
-                ->url(route('filament.admin.resources.database-balitas.index', [
+                ->url(route($routePasien, [
                     'tableFilters[status_stunting][value]' => 'Pendek'
                 ])),
         
@@ -56,8 +54,8 @@ class StatsOverview extends BaseWidget
                 ->description('Berat Badan Sangat Kurang')
                 ->descriptionIcon('heroicon-m-exclamation-triangle')
                 ->color(($metrics->gizi_buruk ?? 0) > 0 ? 'danger' : 'success')
-                ->url(route('filament.admin.resources.database-balitas.index', [
-                    'tableFilters[status_gizi][value]' => 'Gizi Buruk'
+                ->url(route($routePasien, [
+                    'tableFilters[status_gizi][value]' => 'Berat Badan Sangat Kurang'
                 ])),
         
             // 4. STATISTIK BERAT BADAN KURANG
@@ -65,8 +63,8 @@ class StatsOverview extends BaseWidget
                 ->description('Kategori BB Kurang')
                 ->descriptionIcon('heroicon-m-minus-circle')
                 ->color(($metrics->bb_kurang ?? 0) > 0 ? 'warning' : 'success')
-                ->url(route('filament.admin.resources.database-balitas.index', [
-                    'tableFilters[status_gizi][value]' => 'Gizi Kurang' 
+                ->url(route($routePasien, [
+                    'tableFilters[status_gizi][value]' => 'Berat Badan Kurang' 
                 ])),
         
             // 5. STATISTIK GIZI NORMAL
@@ -74,8 +72,8 @@ class StatsOverview extends BaseWidget
                 ->description('Berat Badan Sehat & Ideal')
                 ->descriptionIcon('heroicon-m-check-circle')
                 ->color('success')
-                ->url(route('filament.admin.resources.database-balitas.index', [
-                    'tableFilters[status_gizi][value]' => 'Gizi Baik (Normal)'
+                ->url(route($routePasien, [
+                    'tableFilters[status_gizi][value]' => 'Berat Badan Normal'
                 ])),
         
             // 6. STATISTIK RISIKO OBESITAS
@@ -83,7 +81,7 @@ class StatsOverview extends BaseWidget
                 ->description('Risiko Berat Badan Lebih')
                 ->descriptionIcon('heroicon-m-plus')
                 ->color(($metrics->gizi_lebih ?? 0) > 0 ? 'warning' : 'success')
-                ->url(route('filament.admin.resources.database-balitas.index', [
+                ->url(route($routePasien, [
                     'tableFilters[status_gizi][value]' => 'Risiko Berat Badan Lebih'
                 ])),
         ];

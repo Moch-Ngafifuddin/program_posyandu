@@ -2,28 +2,25 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Filament\Models\Contracts\FilamentUser; // Ambil kontrak Filament
+use Filament\Panel; // Jalur kelas Panel
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 
-class User extends Authenticatable
+class User extends Authenticatable implements FilamentUser // Tambahkan implements FilamentUser
 {
-    /** @use HasFactory<\Database\Factories\UserFactory> */
-    use HasFactory, Notifiable;
+    use Notifiable;
+
+    protected $table = 'users';
 
     protected $fillable = [
+        'posyandu_id',
+        'meja_pelayanan_id',
         'name',
         'email',
         'password',
-        'akses_menu',
         'meja_tugas',
-        'provinsi',
-        'kabupaten_kota',
-        'kecamatan',
-        'desa_kelurahan',
-        'nama_puskesmas',
-        'nama_posyandu',
-        'meja_pelayanan_id',
+        'akses_menu',
     ];
 
     protected $hidden = [
@@ -31,33 +28,18 @@ class User extends Authenticatable
         'remember_token',
     ];
 
+    protected $casts = [
+        'email_verified_at' => 'datetime',
+        'password' => 'hashed',
+        'akses_menu' => 'json',
+    ];
 
-    protected static function booted()
-        {
-            static::saving(function ($user) {
-                if ($user->meja_pelayanan_id) {
-                    $meja = \App\Models\MejaPelayanan::find($user->meja_pelayanan_id);
-                    if ($meja) {
-                        $user->meja_tugas = $meja->kode_meja;
-                    }
-                } else {
-                    $user->meja_tugas = null;
-                }
-            });
-        }
-
-
-    protected function casts(): array
+    /**
+     * Mengatur hak akses user untuk masuk ke Panel Filament.
+     */
+    public function canAccessPanel(Panel $panel): bool
     {
-        return [
-            'email_verified_at' => 'datetime',
-            'password' => 'hashed',
-            'akses_menu' => 'array', //
-        ];
-    }
-
-    public function mejaPelayanan()
-    {
-        return $this->belongsTo(MejaPelayanan::class, 'meja_pelayanan_id');
+        // Berikan izin akses jika user memiliki email admin atau kolom meja_tugas berisi 'Admin'
+        return str_ends_with($this->email, '@posyandu.com') || $this->meja_tugas === 'Admin';
     }
 }

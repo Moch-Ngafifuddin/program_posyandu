@@ -49,7 +49,7 @@ class PemeriksaanExport implements FromCollection, WithHeadings, WithMapping, Wi
 
         return [
             $no++,
-            "'" . ($row->pasien?->nik ?? '-'), // Memaksa format teks agar NIK terenkripsi tidak rusak di Excel
+            "'" . ($row->pasien?->nik ?? '-'), 
             $row->pasien?->nama ?? '-',
             \Carbon\Carbon::parse($row->tgl_periksa)->format('d-m-Y'),
             $row->usia_bulan,
@@ -62,7 +62,7 @@ class PemeriksaanExport implements FromCollection, WithHeadings, WithMapping, Wi
             $row->status_stunting,
             $row->status_bbtb,
             $row->kenaikan_bb,
-            $row->catatan,
+            $row->intervensiKlinis?->catatan ?? '-' 
         ];
     }
 
