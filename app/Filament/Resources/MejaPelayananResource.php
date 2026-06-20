@@ -74,12 +74,12 @@ class MejaPelayananResource extends Resource
     }
     public static function canAccess(): bool
     {
-        $user = Auth::user();
+        $user = \Illuminate\Support\Facades\Auth::user();
         
-        if (is_null($user) || $user->email === 'admin@posyandu.com' || $user->meja_tugas === 'superadmin' || $user->mejaPelayanan?->kode_meja === 'superadmin') {
+        if (is_null($user) || $user->email === 'admin@posyandu.com' || $user->meja_tugas === 'superadmin') {
             return true;
         }
-        
+
         return in_array('meja-pelayanans', $user->akses_menu ?? []);
     }
 }

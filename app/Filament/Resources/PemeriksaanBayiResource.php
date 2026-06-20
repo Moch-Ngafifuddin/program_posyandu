@@ -119,6 +119,9 @@ class PemeriksaanBayiResource extends Resource
         ->schema([
             Forms\Components\Tabs::make('Zona Pelayanan Terintegrasi')
                 ->columnSpanFull()
+                ->afterStateHydrated(function(Forms\Get $get, Forms\Set $set) use ($kalkulasiStatusGizi) {
+                    $kalkulasiStatusGizi($set, $get);
+                })
                 
                 ->activeTab(function() {
                     $paramTab = request()->query('activeTab'); 
@@ -408,7 +411,7 @@ class PemeriksaanBayiResource extends Resource
                                                             $set('kenaikan_bb', 'naik'); 
                                                             $set('keterangan_bb', "N (Naik). Timbangan naik " . number_format($kenaikanRiil, 2) . " Kg (Memenuhi standar KBM Kemenkes usia {$usiaBulan} bulan sebesar {$kbm} Kg).");
                                                         } else {
-                                                            $set('kenaikan_bb', 'not_naik'); 
+                                                            $set('kenaikan_bb', 'tidak_naik'); 
                                                             if ($kenaikanRiil > 0) {
                                                                 $set('keterangan_bb', "T (Tidak Naik). Timbangan hanya naik " . number_format($kenaikanRiil, 2) . " Kg (TIDAK LOLOS standar KBM Kemenkes usia {$usiaBulan} bulan sebesar {$kbm} Kg).");
                                                             } else {
@@ -418,7 +421,7 @@ class PemeriksaanBayiResource extends Resource
                                                     } else {
                                                         $adaRiwayatSamaSekali = \App\Models\PemeriksaanBayi::where('pasien_id', $pasienId)->exists();
                                                         if ($adaRiwayatSamaSekali) {
-                                                            $set('kenaikan_bb', 'not_naik');
+                                                            $set('kenaikan_bb', 'tidak_naik');
                                                             $set('keterangan_bb', "Bulan lalu tidak menimbang (Status: T).");
                                                         } else {
                                                             $set('kenaikan_bb', 'naik');
@@ -436,7 +439,7 @@ class PemeriksaanBayiResource extends Resource
                                             ->placeholder('Otomatis...')
                                             ->options([
                                                 'naik' => 'N (Berat Badan Naik Sesuai KBM)',
-                                                'not_naik' => 'T (Berat Badan Tidak Naik / Kurang Dari KBM)',
+                                                'tidak_naik' => 'T (Berat Badan Tidak Naik / Kurang Dari KBM)',
                                             ])
                                             ->disabled() 
                                             ->dehydrated(),
@@ -462,73 +465,61 @@ class PemeriksaanBayiResource extends Resource
                                         Forms\Components\TextInput::make('zscore_bbtb')->label('Z-Score (BB/TB)')->readOnly()->dehydrated(),
                                     ])->columns(2),
 
-                                Forms\Components\Grid::make(3)
+                                Forms\Components\Group::make()
+                                    ->relationship('intervensiKlinis') 
                                     ->schema([
-                                        Forms\Components\TextInput::make('rambu_gizi')->label('Rambu Gizi (N/T/O)')->placeholder('N')->disabled(fn () => !in_array(Auth::user()?->meja_tugas, ['meja_5', 'superadmin']))->dehydrated(),
-                                        Forms\Components\TextInput::make('titik_pertumbuhan')->label('Titik Grafik (H/K/BGM)')->placeholder('H')->disabled(fn () => !in_array(Auth::user()?->meja_tugas, ['meja_5', 'superadmin']))->dehydrated(),
-                                        Forms\Components\Select::make('pitting_edema')
-                                            ->label('Pitting Edema Bilateral')
-                                            ->options(['tidak ada' => 'Tidak Ada', 'derajat +1' => 'Derajat +1', 'derajat +2' => 'Derajat +2', 'derajat +3' => 'Derajat +3'])
-                                            ->default('tidak ada')
-                                            ->disabled(function() {
-                                                $user = Auth::user();
-                                                if (is_null($user) || $user->email === 'admin@posyandu.com' || $user->meja_tugas === 'superadmin') return false;
-                                                return $user->meja_tugas !== 'meja_5';
-                                            })                                            
-                                            ->dehydrated(),
-                                    ]),
-                                    
-                                Forms\Components\Grid::make(4) 
-                                    ->schema([
-                                        Forms\Components\Toggle::make('vitamin_a')->label('Vit A?')->inline(false)->disabled(fn () => !in_array(Auth::user()?->meja_tugas, ['meja_5', 'superadmin']))->dehydrated(),
-                                        Forms\Components\Toggle::make('obat_cacing')->label('Obat Cacing?')->inline(false)->disabled(fn () => !in_array(Auth::user()?->meja_tugas, ['meja_5', 'superadmin']))->dehydrated(),
-                                        Forms\Components\Toggle::make('asi_eksklusif')->label('ASI Eksklusif?')->inline(false)->disabled(fn () => !in_array(Auth::user()?->meja_tugas, ['meja_5', 'superadmin']))->dehydrated(),
-                                        Forms\Components\Toggle::make('pmba')->label('PMBA?')->inline(false)->disabled(fn () => !in_array(Auth::user()?->meja_tugas, ['meja_5', 'superadmin']))->dehydrated(),
-                                        Forms\Components\Toggle::make('sdidtk')->label('SDIDTK?')->inline(false)->disabled(fn () => !in_array(Auth::user()?->meja_tugas, ['meja_5', 'superadmin']))->dehydrated(),
-                                        Forms\Components\Toggle::make('kelas_ibu')->label('Ikut Kelas Ibu?')->inline(false)->disabled(fn () => !in_array(Auth::user()?->meja_tugas, ['meja_5', 'superadmin']))->dehydrated(),
-                                        Forms\Components\Toggle::make('menerima_mbg')->label('Dapat MBG?')->inline(false)->disabled(fn () => !in_array(Auth::user()?->meja_tugas, ['meja_5', 'superadmin']))->dehydrated(),
-                                    ]),
-                                    
-                                Forms\Components\Select::make('jenis_imunisasi')
-                                    ->label('Jenis Imunisasi Hari Ini')
-                                    ->multiple()
-                                    ->searchable()
-                                    ->disabled(function() {
-                                        $user = Auth::user();
-                                        if (is_null($user) || $user->email === 'admin@posyandu.com' || $user->meja_tugas === 'superadmin') return false;
-                                        return $user->meja_tugas !== 'meja_5';
-                                    })                                   
-                                    ->dehydrated()
-                                    ->options([
-                                        'HB0' => 'HB0 (0 Bulan)', 'BCG' => 'BCG (1 Bulan)', 'Polio 1' => 'Polio 1 (1 Bulan)',
-                                        'DPT-HB-Hib 1' => 'DPT-HB-Hib 1 (2 Bulan)', 'Polio 2' => 'Polio 2 (2 Bulan)', 'PCV 1' => 'PCV 1 (2 Bulan)', 'Rotavirus 1' => 'Rotavirus 1 (2 Bulan)',
-                                        'DPT-HB-Hib 2' => 'DPT-HB-Hib 2 (3 Bulan)', 'Polio 3' => 'Polio 3 (3 Bulan)', 'DPT-HB-Hib 3' => 'DPT-HB-Hib 3 (4 Bulan)',
-                                        'Polio 4' => 'Polio 4 (4 Bulan)', 'IPV 1' => 'IPV 1 (4 Bulan)', 'Campak-MR 1' => 'Campak/MR 1 (9 Bulan)',
-                                    ]),
-                                    
-                                Forms\Components\Textarea::make('catatan')
-                                    ->label('Catatan / KIE (Konseling)')
-                                    ->columnSpanFull()
-                                    ->disabled(function() {
-                                        $user = Auth::user();
-                                        if (is_null($user) || $user->email === 'admin@posyandu.com' || $user->meja_tugas === 'superadmin') return false;
-                                        return $user->meja_tugas !== 'meja_5';
-                                    })                                   
-                                    ->dehydrated(),
-                                    
-                                Forms\Components\Grid::make(3)
-                                    ->schema([
-                                        Forms\Components\Toggle::make('deteksi_tbc')
-                                            ->label('S. TBC (Deteksi)')
-                                            ->disabled(function() {
-                                                $user = Auth::user();
-                                                if (is_null($user) || $user->email === 'admin@posyandu.com' || $user->meja_tugas === 'superadmin') return false;
-                                                return $user->meja_tugas !== 'meja_5';
-                                            })                                           
+                                        Forms\Components\Grid::make(3)
+                                            ->schema([
+                                                Forms\Components\TextInput::make('rambu_gizi')->label('Rambu Gizi (N/T/O)')->placeholder('N')->disabled(fn () => !in_array(Auth::user()?->meja_tugas, ['meja_5', 'superadmin']))->dehydrated(),
+                                                Forms\Components\TextInput::make('titik_pertumbuhan')->label('Titik Grafik (H/K/BGM)')->placeholder('H')->disabled(fn () => !in_array(Auth::user()?->meja_tugas, ['meja_5', 'superadmin']))->dehydrated(),
+                                                Forms\Components\Select::make('pitting_edema')
+                                                    ->label('Pitting Edema Bilateral')
+                                                    ->options(['tidak ada' => 'Tidak Ada', 'derajat +1' => 'Derajat +1', 'derajat +2' => 'Derajat +2', 'derajat +3' => 'Derajat +3'])
+                                                    ->default('tidak ada')
+                                                    ->disabled(fn () => auth()->user()?->meja_tugas !== 'meja_5' && auth()->user()?->meja_tugas !== 'superadmin')                                            
+                                                    ->dehydrated(),
+                                            ]),
+                                            
+                                        Forms\Components\Grid::make(4) 
+                                            ->schema([
+                                                Forms\Components\Toggle::make('vitamin_a')->label('Vit A?')->inline(false)->disabled(fn () => !in_array(Auth::user()?->meja_tugas, ['meja_5', 'superadmin']))->dehydrated(),
+                                                Forms\Components\Toggle::make('obat_cacing')->label('Obat Cacing?')->inline(false)->disabled(fn () => !in_array(Auth::user()?->meja_tugas, ['meja_5', 'superadmin']))->dehydrated(),
+                                                Forms\Components\Toggle::make('asi_eksklusif')->label('ASI Eksklusif?')->inline(false)->disabled(fn () => !in_array(Auth::user()?->meja_tugas, ['meja_5', 'superadmin']))->dehydrated(),
+                                                Forms\Components\Toggle::make('pmba')->label('PMBA?')->inline(false)->disabled(fn () => !in_array(Auth::user()?->meja_tugas, ['meja_5', 'superadmin']))->dehydrated(),
+                                                Forms\Components\Toggle::make('sdidtk')->label('SDIDTK?')->inline(false)->disabled(fn () => !in_array(Auth::user()?->meja_tugas, ['meja_5', 'superadmin']))->dehydrated(),
+                                                Forms\Components\Toggle::make('kelas_ibu')->label('Ikut Kelas Ibu?')->inline(false)->disabled(fn () => !in_array(Auth::user()?->meja_tugas, ['meja_5', 'superadmin']))->dehydrated(),
+                                                Forms\Components\Toggle::make('menerima_mbg')->label('Dapat MBG?')->inline(false)->disabled(fn () => !in_array(Auth::user()?->meja_tugas, ['meja_5', 'superadmin']))->dehydrated(),
+                                            ]),
+                                            
+                                        Forms\Components\Select::make('jenis_imunisasi')
+                                            ->label('Jenis Imunisasi Hari Ini')
+                                            ->multiple()
+                                            ->searchable()
+                                            ->disabled(fn () => auth()->user()?->meja_tugas !== 'meja_5' && auth()->user()?->meja_tugas !== 'superadmin')                                   
                                             ->dehydrated()
-                                            ->helperText(new \Illuminate\Support\HtmlString("<span class='text-xs text-rose-600 block mt-1'>⚠️ Aktifkan jika Batuk/Demam &ge; 2 minggu, BB 2T, atau lesu.</span>")),
-                                        Forms\Components\Toggle::make('kie')->label('Sudah KIE/Konseling?')->disabled(fn () => !in_array(Auth::user()?->meja_tugas, ['meja_5', 'superadmin']))->dehydrated(),
-                                        Forms\Components\Toggle::make('rujuk')->label('Rujuk Ke Puskesmas?')->disabled(fn () => !in_array(Auth::user()?->meja_tugas, ['meja_5', 'superadmin']))->dehydrated(),
+                                            ->options([
+                                                'HB0' => 'HB0 (0 Bulan)', 'BCG' => 'BCG (1 Bulan)', 'Polio 1' => 'Polio 1 (1 Bulan)',
+                                                'DPT-HB-Hib 1' => 'DPT-HB-Hib 1 (2 Bulan)', 'Polio 2' => 'Polio 2 (2 Bulan)', 'PCV 1' => 'PCV 1 (2 Bulan)', 'Rotavirus 1' => 'Rotavirus 1 (2 Bulan)',
+                                                'DPT-HB-Hib 2' => 'DPT-HB-Hib 2 (3 Bulan)', 'Polio 3' => 'Polio 3 (3 Bulan)', 'DPT-HB-Hib 3' => 'DPT-HB-Hib 3 (4 Bulan)',
+                                                'Polio 4' => 'Polio 4 (4 Bulan)', 'IPV 1' => 'IPV 1 (4 Bulan)', 'Campak-MR 1' => 'Campak/MR 1 (9 Bulan)',
+                                            ]),
+                                            
+                                        Forms\Components\Textarea::make('catatan')
+                                            ->label('Catatan / KIE (Konseling)')
+                                            ->columnSpanFull()
+                                            ->disabled(fn () => auth()->user()?->meja_tugas !== 'meja_5' && auth()->user()?->meja_tugas !== 'superadmin')                                   
+                                            ->dehydrated(),
+                                            
+                                        Forms\Components\Grid::make(3)
+                                            ->schema([
+                                                Forms\Components\Toggle::make('deteksi_tbc')
+                                                    ->label('S. TBC (Deteksi)')
+                                                    ->disabled(fn () => auth()->user()?->meja_tugas !== 'meja_5' && auth()->user()?->meja_tugas !== 'superadmin')                                           
+                                                    ->dehydrated()
+                                                    ->helperText(new \Illuminate\Support\HtmlString("<span class='text-xs text-rose-600 block mt-1'>⚠️ Aktifkan jika Batuk/Demam &ge; 2 minggu, BB 2T, atau lesu.</span>")),
+                                                Forms\Components\Toggle::make('kie')->label('Sudah KIE/Konseling?')->disabled(fn () => !in_array(Auth::user()?->meja_tugas, ['meja_5', 'superadmin']))->dehydrated(),
+                                                Forms\Components\Toggle::make('rujuk')->label('Rujuk Ke Puskesmas?')->disabled(fn () => !in_array(Auth::user()?->meja_tugas, ['meja_5', 'superadmin']))->dehydrated(),
+                                            ]),
                                     ]),
                             ]),
                     ]),
@@ -540,13 +531,17 @@ class PemeriksaanBayiResource extends Resource
         return $table
             ->modifyQueryUsing(fn ($query) => $query->with(['pasien']))
             ->columns([
-                Tables\Columns\TextColumn::make('pasien.nama')->label('Nama Balita')->searchable(),
+                Tables\Columns\TextColumn::make('pasien.nama')
+                    ->label('Nama Balita')
+                    ->searchable()
+                    ->sortable(),
+
                 Tables\Columns\TextColumn::make('keterangan_umur')->label('Usia')->badge()->color('success'),
                 Tables\Columns\TextColumn::make('berat_badan')->label('Berat (Zona B)')->suffix(' Kg')->placeholder('⏳ Mengantre'),
                 Tables\Columns\TextColumn::make('tinggi_badan')->label('Tinggi (Zona B)')->suffix(' Cm')->placeholder('⏳ Mengantre'),
                 Tables\Columns\TextColumn::make('lila')->label('LiLA (Zona A)')->suffix(' Cm')->placeholder('-'),
                 Tables\Columns\IconColumn::make('menerima_mbg')->label('MBG')->boolean(),
-            ])
+                ])
 
             ->headerActions([
                 Tables\Actions\CreateAction::make()
@@ -568,9 +563,6 @@ class PemeriksaanBayiResource extends Resource
                 ->url(function() {
                     $user = Auth::user();
                     $kodeMeja = $user?->mejaPelayanan?->kode_meja;
-                    
-                    // Jika superadmin atau superuser, default buka meja_1 (Zona A)
-                    // Jika kader biasa, gunakan kode_meja tugasnya masing-masing
                     $tabAktif = in_array($kodeMeja, ['superadmin', 'superuser']) ? 'meja_1' : $user?->meja_tugas;
             
                     return static::getUrl('create') . '?activeTab=' . $tabAktif;
@@ -641,15 +633,13 @@ class PemeriksaanBayiResource extends Resource
                 
             ])
 
-            ->poll('3s') 
+            ->poll('5s') 
             ->actions([
-                // 📋 1. TOMBOL UTAMA (Membuka Detail Form secara umum)
                 Tables\Actions\EditAction::make()
                     ->label('Detail Form')
                     ->icon('heroicon-o-pencil-square')
                     ->color('secondary'),
 
-                // ⚖️ 2. TOMBOL TIMBANG (Otomatis melompat ke halaman Edit & membuka Tab ZONA B)
                 Tables\Actions\EditAction::make('timbang_action')
                     ->label('Timbang (Zona B)')
                     ->icon('heroicon-o-scale')
@@ -657,7 +647,6 @@ class PemeriksaanBayiResource extends Resource
                     ->visible(fn () => in_array(Auth::user()?->meja_tugas, ['meja_2', 'meja_4', 'superadmin']) || Auth::user()?->email === 'admin@posyandu.com')
                     ->url(fn (PemeriksaanBayi $record) => static::getUrl('edit', ['record' => $record]) . '?activeTab=meja_2'),
 
-                // 🩺 3. TOMBOL EVALUASI (Otomatis melompat ke halaman Edit & membuka Tab ZONA C)
                 Tables\Actions\EditAction::make('evaluasi_action')
                     ->label('Evaluasi (Zona C)')
                     ->icon('heroicon-o-clipboard-document-check')
@@ -682,21 +671,23 @@ class PemeriksaanBayiResource extends Resource
             ->whereDate('tgl_periksa', \Carbon\Carbon::today()->toDateString());
     }
 
-    public static function canCreate(): bool {
+    public static function canCreate(): bool 
+    {
         $user = Auth::user();
-        $kodeMeja = $user?->mejaPelayanan?->kode_meja;
         
-        return $user?->email === 'admin@posyandu.com' || $kodeMeja === 'superadmin' || $kodeMeja === 'meja_1';
+        return $user?->email === 'admin@posyandu.com' 
+            || $user?->meja_tugas === 'superadmin' 
+            || $user?->meja_tugas === 'meja_1';
     }
 
     public static function canAccess(): bool
     {
-        $user = Auth::user();
+        $user = \Illuminate\Support\Facades\Auth::user();
         
-        if (is_null($user) || $user->email === 'admin@posyandu.com' || $user->meja_tugas === 'superadmin' || $user->mejaPelayanan?->kode_meja === 'superadmin') {
+        if (is_null($user) || $user->email === 'admin@posyandu.com' || $user->meja_tugas === 'superadmin') {
             return true;
         }
-        
+
         return in_array('pemeriksaan-bayis', $user->akses_menu ?? []);
     }
 }

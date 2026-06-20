@@ -39,4 +39,9 @@ return [
         'token' => env('FONNTE_TOKEN'),
     ],
 
+    'turnstile' => [
+        'site_key' => env('CLOUDFLARE_TURNSTILE_SITE_KEY'),
+        'secret_key' => env('CLOUDFLARE_TURNSTILE_SECRET_KEY'),
+    ],
+
 ];

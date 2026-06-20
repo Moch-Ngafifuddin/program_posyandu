@@ -2,41 +2,26 @@
 
 namespace App\Exports;
 
-use App\Models\PemeriksaanBayi;
-use Maatwebsite\Excel\Concerns\FromQuery;
+use Maatwebsite\Excel\Concerns\FromCollection;
 use Maatwebsite\Excel\Concerns\WithHeadings;
 use Maatwebsite\Excel\Concerns\WithMapping;
-use Illuminate\Database\Eloquent\Builder;
+use Maatwebsite\Excel\Concerns\WithStyles;
+use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 
-class DatabaseBalitaExport implements FromQuery, WithHeadings, WithMapping
+class DatabaseBalitaExport implements FromCollection, WithHeadings, WithMapping, WithStyles
 {
-    protected $posyanduId;
+    protected $records;
 
-    public function __0construct($posyanduId = null)
+    public function __construct($records)
     {
-        $this->posyanduId = $posyanduId;
+        $this->records = $records;
     }
 
-    /**
-     * 🟢 SINKRON: Mengambil query pemeriksaan lengkap dengan Eager Loading relasi baru
-     */
-    public function query()
+    public function collection()
     {
-        $query = PemeriksaanBayi::query()->with(['pasien.posyandu', 'intervensiKlinis']);
-
-        // Jika user yang login adalah admin posyandu tertentu, filter berdasarkan posyandu mereka
-        if ($this->posyanduId) {
-            $query->whereHas('pasien', function (Builder $q) {
-                $q->where('posyandu_id', $this->posyanduId);
-            });
-        }
-
-        return $query;
+        return $this->records;
     }
 
-    /**
-     * Menentukan judul kolom pada file Excel
-     */
     public function headings(): array
     {
         return [
@@ -62,27 +47,23 @@ class DatabaseBalitaExport implements FromQuery, WithHeadings, WithMapping
         ];
     }
 
-    /**
-     * 🟢 SINKRON: Memetakan baris data sesuai struktur database baru
-     */
     public function map($row): array
     {
         static $rowNumber = 0;
         $rowNumber++;
 
-        $pasien = $row->pasien;
-        $posyandu = $pasien?->posyandu;
-        $intervensi = $row->intervensiKlinis;
+        $posyandu = $row->posyandu;
+        $pemeriksaan = $row->latestPemeriksaan; 
+        $intervensi = $pemeriksaan?->intervensiKlinis;
 
         return [
             $rowNumber,
-            $pasien?->nik ?? '-',
-            $pasien?->nama ?? '-',
-            $pasien?->jenis_kelamin ?? '-',
-            $pasien?->tgl_lahir ? \Carbon\Carbon::parse($pasien->tgl_lahir)->format('d-m-Y') : '-',
-            $pasien?->nama_ibu ?? '-',
+            "'" . ($row->nik ?? '-'),
+            $row->nama ?? '-',
+            $row->jenis_kelamin ?? '-',
+            $row->tgl_lahir ? \Carbon\Carbon::parse($row->tgl_lahir)->format('d-m-Y') : '-',
+            $row->nama_ibu ?? '-',
             
-            // Kolom wilayah diambil dari master_posyandu relasi pasien
             $posyandu?->provinsi ?? '-',
             $posyandu?->kabupaten_kota ?? '-',
             $posyandu?->kecamatan ?? '-',
@@ -90,15 +71,21 @@ class DatabaseBalitaExport implements FromQuery, WithHeadings, WithMapping
             $posyandu?->desa_kelurahan ?? '-',
             $posyandu?->nama_posyandu ?? '-',
             
-            $row->usia_bulan ?? 0,
-            $row->berat_badan ?? 0,
-            $row->tinggi_badan ?? 0,
-            $row->status_gizi ?? '-',
-            $row->status_stunting ?? '-',
+            $pemeriksaan?->usia_bulan ?? 0,
+            $pemeriksaan?->berat_badan ?? 0,
+            $pemeriksaan?->tinggi_badan ?? 0,
+            $pemeriksaan?->status_gizi ?? '-',
+            $pemeriksaan?->status_stunting ?? '-',
             
-            // Kolom intervensi diambil dari sub-tabel pemeriksaan_intervensi_klinis
             $intervensi?->vitamin_a ? 'Ya' : 'Tidak',
             $intervensi?->obat_cacing ? 'Ya' : 'Tidak',
+        ];
+    }
+
+    public function styles(Worksheet $sheet)
+    {
+        return [
+            1 => ['font' => ['bold' => true]],
         ];
     }
 }

@@ -32,13 +32,13 @@
             <div>
                 <table class="w-full">
                     <tr><td class="text-gray-500 py-1 w-1/3">Alamat</td><td class="font-semibold">: {{ $pasien->alamat }}</td></tr>
-                    <tr><td class="text-gray-500 py-1">Anak Ke</td><td class="font-semibold">: {{ $pasien->anak_ke ?? '-' }}</td></tr>
+                    <tr><td class="text-gray-500 py-1">Anak Ke</td><td class="font-semibold">: {{ $pasien->riwayatKelahiran?->anak_ke ?? '-' }}</td></tr>
                     <tr><td class="text-gray-500 py-1">Jenis Kelamin</td><td class="font-semibold">: {{ $pasien->jenis_kelamin == 'L' ? 'Laki-laki' : 'Perempuan' }}</td></tr>
                     <tr><td class="text-gray-500 py-1">Tempat, Tgl Lahir</td><td class="font-semibold">: {{ $pasien->tempat_lahir ?? '-' }}, {{ \Carbon\Carbon::parse($pasien->tgl_lahir)->format('d M Y') }}</td></tr>
-                    <tr><td class="text-gray-500 py-1">BBL (Berat Lahir)</td><td class="font-semibold">: {{ $pasien->berat_lahir ?? '-' }} gram</td></tr>
-                    <tr><td class="text-gray-500 py-1">PBL (Panjang Lahir)</td><td class="font-semibold">: {{ $pasien->panjang_lahir ?? '-' }} cm</td></tr>
-                    <tr><td class="text-gray-500 py-1">IMD (Menyusu Dini)</td><td class="font-semibold">: {{ $pasien->imd ? 'YA' : 'TIDAK' }}</td></tr>
-                    <tr><td class="text-gray-500 py-1">Riwayat ASI</td><td class="font-semibold">: {{ $pasien->riwayat_asi ?? '-' }}</td></tr>
+                    <tr><td class="text-gray-500 py-1">BBL (Berat Lahir)</td><td class="font-semibold">: {{ $pasien->riwayatKelahiran?->berat_lahir ?? '-' }} Kg</td></tr>
+                    <tr><td class="text-gray-500 py-1">PBL (Panjang Lahir)</td><td class="font-semibold">: {{ $pasien->riwayatKelahiran?->panjang_lahir ?? '-' }} Cm</td></tr>
+                    <tr><td class="text-gray-500 py-1">IMD (Menyusu Dini)</td><td class="font-semibold">: {{ $pasien->riwayatKelahiran?->imd ? 'YA' : 'TIDAK' }}</td></tr>
+                    <tr><td class="text-gray-500 py-1">Riwayat ASI</td><td class="font-semibold">: {{ $pasien->riwayatKelahiran?->riwayat_asi ?? '-' }}</td></tr>
                     <tr><td class="text-gray-500 py-1">NO HP Aktif</td><td class="font-semibold">: {{ $pasien->no_hp ?? '-' }}</td></tr>
                 </table>
             </div>
@@ -67,42 +67,45 @@
                 </thead>
                 <tbody>
                     @forelse($pasien->pemeriksaanBayi as $riwayat)
-                    <tr class="bg-white border-b hover:bg-gray-50">
-                        <td class="px-2 py-2 border-r">{{ \Carbon\Carbon::parse($riwayat->tgl_periksa)->format('d/m/Y') }}</td>
-                        
-                        <td class="px-2 py-2 border-r font-medium text-green-700">{{ $riwayat->keterangan_umur ?? '-' }}</td>
-                        
-                        <td class="px-2 py-2 border-r">{{ $riwayat->berat_badan ?? '-' }}</td>
-                        <td class="px-2 py-2 border-r font-bold">{{ $riwayat->rambu_gizi ?? '-' }}</td>
-                        <td class="px-2 py-2 border-r">{{ $riwayat->titik_pertumbuhan ?? '-' }}</td>
-                        <td class="px-2 py-2 border-r">{{ $riwayat->tinggi_badan ?? '-' }}</td>
-                        <td class="px-2 py-2 border-r">{{ $riwayat->lingkar_kepala ?? '-' }}</td>
-                        <td class="px-2 py-2 border-r">{{ $riwayat->lingkar_lengan ?? '-' }}</td>
-                        
-                        <td class="px-2 py-2 border-r text-xs">
-                            @php
-                                $vit_cacing = [];
-                                if($riwayat->vitamin_a) $vit_cacing[] = 'Vit A';
-                                if($riwayat->obat_cacing) $vit_cacing[] = 'Obat Cacing';
-                            @endphp
-                            {!! count($vit_cacing) > 0 ? implode('<br>', $vit_cacing) : '-' !!}
-                        </td>
-                        
-                        <td class="px-2 py-2 border-r text-xs">
-                            @php
-                                $layanan = [];
-                                if($riwayat->sdidtk) $layanan[] = 'SDIDTK';
-                                if($riwayat->pmba) $layanan[] = 'PMBA';
-                                if($riwayat->asi_eksklusif) $layanan[] = 'ASI';
-                            @endphp
-                            {!! count($layanan) > 0 ? implode('<br>', $layanan) : '-' !!}
-                        </td>
-                        
-                        <td class="px-2 py-2 border-r">{{ $riwayat->jenis_imunisasi ?? '-' }}</td>
-                        <td class="px-2 py-2 border-r font-bold text-blue-600">{{ $riwayat->deteksi_tbc ? 'v' : '-' }}</td>
-                        <td class="px-2 py-2 border-r font-bold text-blue-600">{{ $riwayat->kie ? 'v' : '-' }}</td>
-                        <td class="px-2 py-2 font-bold text-red-500">{{ $riwayat->rujuk ? 'v' : '-' }}</td>
-                    </tr>
+                        @php
+                            $intervensi = $riwayat->intervensiKlinis;
+                        @endphp
+                        <tr class="bg-white border-b hover:bg-gray-50">
+                            <td class="px-2 py-2 border-r">{{ \Carbon\Carbon::parse($riwayat->tgl_periksa)->format('d/m/Y') }}</td>
+                            <td class="px-2 py-2 border-r font-medium text-green-700">{{ $riwayat->keterangan_umur ?? '-' }}</td>
+                            <td class="px-2 py-2 border-r">{{ $riwayat->berat_badan ?? '-' }}</td>
+                            <td class="px-2 py-2 border-r font-bold">{{ $riwayat->rambu_gizi ?? '-' }}</td>
+                            <td class="px-2 py-2 border-r">{{ $riwayat->titik_pertumbuhan ?? '-' }}</td>
+                            <td class="px-2 py-2 border-r">{{ $riwayat->tinggi_badan ?? '-' }}</td>
+                            <td class="px-2 py-2 border-r">{{ $riwayat->lingkar_kepala ?? '-' }}</td>
+                            <td class="px-2 py-2 border-r">{{ $riwayat->lila ?? '-' }}</td>
+                            
+                            <td class="px-2 py-2 border-r text-xs">
+                                @php
+                                    $vit_cacing = [];
+                                    // Membaca data dari tabel pecahan baru
+                                    if($intervensi?->vitamin_a) $vit_cacing[] = 'Vit A';
+                                    if($intervensi?->obat_cacing) $vit_cacing[] = 'Obat Cacing';
+                                @endphp
+                                {!! count($vit_cacing) > 0 ? implode('<br>', $vit_cacing) : '-' !!}
+                            </td>
+                            
+                            <td class="px-2 py-2 border-r text-xs">
+                                @php
+                                    $layanan = [];
+                                    // Membaca data dari tabel pecahan baru
+                                    if($intervensi?->sdidtk) $layanan[] = 'SDIDTK';
+                                    if($intervensi?->pmba) $layanan[] = 'PMBA';
+                                    if($intervensi?->asi_eksklusif) $layanan[] = 'ASI';
+                                @endphp
+                                {!! count($layanan) > 0 ? implode('<br>', $layanan) : '-' !!}
+                            </td>
+                            
+                            <td class="px-2 py-2 border-r">{{ $intervensi?->jenis_imunisasi ?? '-' }}</td>
+                            <td class="px-2 py-2 border-r font-bold text-blue-600">{{ $intervensi?->deteksi_tbc ? 'v' : '-' }}</td>
+                            <td class="px-2 py-2 border-r font-bold text-blue-600">{{ $intervensi?->kie ? 'v' : '-' }}</td>
+                            <td class="px-2 py-2 font-bold text-red-500">{{ $intervensi?->rujuk ? 'v' : '-' }}</td>
+                        </tr>
                     @empty
                     <tr>
                         <td colspan="14" class="px-4 py-6 text-center text-gray-500">

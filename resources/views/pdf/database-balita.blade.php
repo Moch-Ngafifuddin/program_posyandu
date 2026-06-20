@@ -143,21 +143,26 @@
             @forelse($records as $index => $row)
                 <tr>
                     <td>{{ $index + 1 }}</td>
-                    <td class="font-mono">{{ $row->pasien?->nik ?? '-' }}</td>
-                    <td class="text-left" style="font-weight: bold;">{{ $row->pasien?->nama ?? '-' }}</td>
-                    <td>{{ $row->pasien?->jenis_kelamin ?? '-' }}</td>
-                    <td>{{ $row->pasien?->tgl_lahir ? \Carbon\\Carbon::parse($row->pasien->tgl_lahir)->format('d-m-Y') : '-' }}</td>
-                    <td class="text-left row-nama-ibu">{{ $row->pasien?->nama_ibu ?? '-' }}</td>
+                    <td class="font-mono">{{ $row->nik ?? '-' }}</td>
+                    <td class="text-left" style="font-weight: bold;">{{ $row->nama ?? '-' }}</td>
+                    <td>{{ $row->jenis_kelamin ?? '-' }}</td>
+                    <td>{{ $row->tgl_lahir ? \Carbon\Carbon::parse($row->tgl_lahir)->format('d-m-Y') : '-' }}</td>
+                    <td class="text-left row-nama-ibu">{{ $row->nama_ibu ?? '-' }}</td>
                     
-                    <td>{{ $row->pasien?->posyandu?->provinsi ?? '-' }}</td>
-                    <td>{{ $row->pasien?->posyandu?->kabupaten_kota ?? '-' }}</td>
-                    <td>{{ $row->pasien?->posyandu?->kecamatan ?? '-' }}</td>
-                    <td>{{ $row->pasien?->posyandu?->nama_puskesmas ?? '-' }}</td>
-                    <td>{{ $row->pasien?->posyandu?->desa_kelurahan ?? '-' }}</td>
-                    <td>{{ $row->pasien?->posyandu?->nama_posyandu ?? '-' }}</td>
+                    <td>{{ $row->posyandu?->provinsi ?? '-' }}</td>
+                    <td>{{ $row->posyandu?->kabupaten_kota ?? '-' }}</td>
+                    <td>{{ $row->posyandu?->kecamatan ?? '-' }}</td>
+                    <td>{{ $row->posyandu?->nama_puskesmas ?? '-' }}</td>
+                    <td>{{ $row->posyandu?->desa_kelurahan ?? '-' }}</td>
+                    <td>{{ $row->posyandu?->nama_posyandu ?? '-' }}</td>
                 </tr>
             @empty
-               @endforelse
+                <tr>
+                    <td colspan="12" style="padding: 10px; font-style: italic; color: #666;">
+                        Tidak ada records data balita aktif yang ditemukan.
+                    </td>
+                </tr>
+            @endforelse
         </tbody>
     </table>
 

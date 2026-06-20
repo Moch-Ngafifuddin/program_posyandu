@@ -12,12 +12,10 @@ class PasienImport implements ToModel, WithHeadingRow
 {
     public function model(array $row)
     {
-        // 1. Validasi baris kosong kritis (Menyesuaikan heading template lama Anda)
         if (empty($row['nama_lengkap']) || empty($row['tgl_lahir'])) {
             return null;
         }
 
-        // 2. Normalisasi Format Tanggal Lahir dari Excel
         $tanggalLahir = null;
         if (!empty($row['tgl_lahir'])) {
             if (is_numeric($row['tgl_lahir'])) {
@@ -27,11 +25,9 @@ class PasienImport implements ToModel, WithHeadingRow
             }
         }
 
-        // 3. Ambil posyandu_id otomatis dari akun kader aktif yang sedang login melakukan import
         $user = Auth::user();
         $posyanduId = $user?->posyandu_id ?? 1; 
 
-        // 4. PEMETAAN DATA UTAMA BALITA (Dari Kolom Indonesia Excel Lama -> Tabel Pasien Baru)
         $pasien = Pasien::create([
             'posyandu_id'               => $posyanduId,
             'nik'                       => $row['nik'] ?? null,
@@ -45,7 +41,6 @@ class PasienImport implements ToModel, WithHeadingRow
             'rw'                        => $row['rw'] ?? null,
             'no_hp'                     => $row['nomor_whatsapp_aktif'] ?? $row['no_hp'] ?? null,
             
-            // Data Orang Tua dari template lama
             'nama_ibu'                  => $row['nama_ibu'] ?? '-',
             'nik_ibu'                   => $row['nik_ibu'] ?? null,
             'pendidikan_pekerjaan_ibu'  => $row['pendidikanpekerjaan_ibu'] ?? null,
@@ -56,7 +51,6 @@ class PasienImport implements ToModel, WithHeadingRow
             'is_arsip'                  => 0,
         ]);
 
-        // 5. PEMETAAN DATA RIAWAYAT LAHIR (Dari Kolom Indonesia Excel Lama -> Tabel Terpisah Baru)
         $pasien->riwayatKelahiran()->create([
             'anak_ke'              => !empty($row['anak_ke']) ? (int)$row['anak_ke'] : null,
             'usia_kehamilan'       => !empty($row['usia_kehamilan_saat_lahir_minggu']) ? (int)$row['usia_kehamilan_saat_lahir_minggu'] : null,

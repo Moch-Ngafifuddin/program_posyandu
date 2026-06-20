@@ -14,6 +14,7 @@ use Filament\Forms\Components\ColorPicker;
 use Filament\Notifications\Notification;
 use App\Models\Pengaturan;
 use Illuminate\Support\Facades\Auth;
+use Filament\Actions\Action;
 
 class PengaturanSistem extends Page
 {
@@ -29,7 +30,8 @@ class PengaturanSistem extends Page
 
     public function mount(): void
     {
-        $pengaturan = Pengaturan::firstOrCreate(['id' => 1]);
+        $pengaturan = Pengaturan::find(1) ?? new Pengaturan();
+        
         $this->form->fill($pengaturan->toArray());
     }
 
@@ -54,9 +56,10 @@ class PengaturanSistem extends Page
                             ->helperText('Teks ini akan menjadi judul utama halaman login menggantikan tulisan LOGIN AKUN.') 
                             ->required(),
 
-                        FileUpload::make('logo')
+                            FileUpload::make('logo')
                             ->label('Upload Logo Puskesmas Utama (Muncul di Pojok Kiri Atas / Sidebar Panel)')
                             ->image()
+                            ->disk('public')
                             ->directory('branding-logo'),
 
                         Select::make('tinggi_logo_utama')
@@ -85,8 +88,9 @@ class PengaturanSistem extends Page
                             ->label('Upload Gambar Latar Belakang (Background Login)')
                             ->image()
                             ->imageEditor()
+                            ->disk('public')
                             ->directory('branding-bg')
-                            ->maxSize(10240), 
+                            ->maxSize(10240),
                             
                         ColorPicker::make('warna_tema')
                             ->label('Warna Utama Aplikasi (Theme Color)')
@@ -102,6 +106,7 @@ class PengaturanSistem extends Page
                                 FileUpload::make('path_logo')
                                     ->label('Preview Logo Instansi')
                                     ->image()
+                                    ->disk('public')
                                     ->directory('system-logos')
                                     ->imagePreviewHeight('150') 
                                     ->maxSize(2048) 
@@ -126,10 +131,23 @@ class PengaturanSistem extends Page
             ->statePath('data');
     }
 
+
+    protected function getFormActions(): array
+    {
+        return [
+            Action::make('simpan')
+                ->label('Simpan Perubahan Tampilan')
+                ->submit('form')
+                ->color('success')
+                ->icon('heroicon-m-check'),
+        ];
+    }
+
     public function simpan(): void
     {
         $formData = $this->form->getState();
         Pengaturan::updateOrCreate(['id' => 1], $formData);
+        
         Notification::make()
             ->title('Konfigurasi Berhasil Disimpan')
             ->body('Perubahan branding dan tampilan sukses diterapkan ke sistem.')

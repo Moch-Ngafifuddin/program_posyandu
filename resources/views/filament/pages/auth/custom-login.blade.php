@@ -5,6 +5,8 @@
     'pengaturan' => null,
 ])
 
+<script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+
 {{-- Memetakan pilihan database ke utility class Tailwind CSS untuk posisi --}}
 @php
     $posisiTataLetak = match($pengaturan?->posisi_form_login) {
@@ -14,9 +16,6 @@
     };
 @endphp
 
-<!-- <div class="min-h-screen w-screen flex items-center {{ $posisiTataLetak }} p-4 sm:p-6 font-['Poppins'] bg-cover bg-center bg-no-repeat relative transition-all duration-500"
-     style="background-color: #f8fafc; @if($pengaturan?->background_login) background-image: url('{{ Storage::url($pengaturan->background_login) }}'); @endif">
-     {{-- Cari baris pembungkus paling luar ini --}} -->
 <div class="min-h-screen w-screen flex items-center {{ $posisiTataLetak }} p-4 sm:p-6 font-['Poppins'] bg-cover bg-center bg-no-repeat relative transition-all duration-500 bg-slate-50 dark:bg-slate-900"
      style="@if($pengaturan?->background_login) background-image: url('{{ Storage::url($pengaturan->background_login) }}'); @endif">
 
@@ -25,7 +24,6 @@
     @endif
 
     <style>
-        /* 🛠️ IMPORT FONT POPPINS */
         @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&display=swap');
 
         :root {
@@ -36,7 +34,6 @@
             font-family: 'Poppins', sans-serif !important;
         }
 
-        /* 🔴 SOLUSI UTAMA: Paksa semua font teks & label di dalam card berwarna HITAM/GELAP */
         .login-card h2,
         .login-card label,
         .login-card label *,
@@ -44,7 +41,7 @@
         .login-card .text-slate-500,
         .login-card p,
         .login-card span {
-            color: #1e293b !important; /* Warna Slate 800 (Hitam Elegan & Adem) */
+            color: #1e293b !important;
         }
 
         .login-card input,
@@ -52,11 +49,10 @@
         .login-card input:-webkit-autofill:hover, 
         .login-card input:-webkit-autofill:focus {
             color: #1e293b !important;
-            -webkit-text-fill-color: #1e293b !important; /* Memaksa warna font di Google Chrome / Edge */
+            -webkit-text-fill-color: #1e293b !important; 
             background-color: rgba(255, 255, 255, 0.8) !important;
         }
 
-        /* Mengubah warna teks placeholder saat belum diketik (opsional, agar adem) */
         .login-card input::placeholder {
             color: #64748b !important;
         }
@@ -83,7 +79,6 @@
             font-family: 'Poppins', sans-serif !important;
         }
 
-        /* 🟢 KECUALIAN: Teks di dalam tombol "Masuk" harus tetap berwarna PUTIH */
         .fi-btn-primary, 
         .fi-btn-primary * {
             color: #ffffff !important;
@@ -99,7 +94,7 @@
             min-height: 46px !important;
             background-color: rgba(255, 255, 255, 0.6) !important;
             font-family: 'Poppins', sans-serif !important;
-            color: #1e293b !important; /* 🟢 TAMBAHKAN INI: Agar teks email/password yang diketik kader tetap berwarna HITAM */
+            color: #1e293b !important; 
         }
 
         .logo-item img {
@@ -144,7 +139,7 @@
             </div>
         @endif
 
-        {{-- 🛠️ PERBAIKAN HEADER: Tulisan "LOGIN AKUN" Dihapus, Teks Selamat Datang Diperbesar Proporsional --}}
+        {{-- 🛠️ PERBAIKAN HEADER --}}
         <div class="text-center mb-6 xl:mb-8 px-2">
         <h2 class="text-lg sm:text-xl xl:text-2xl font-bold text-slate-800 dark:text-slate-200 leading-snug tracking-tight">
             {{ $teks_login ?? 'Masuk menggunakan kredensial petugas yang valid.' }}
@@ -156,6 +151,21 @@
             <x-filament-panels::form wire:submit="authenticate">
                 
                 {{ $this->form }}
+
+                <div class="mt-4 flex flex-col items-center justify-center">
+                    <div wire:ignore>
+                        <div class="cf-turnstile" 
+                             data-sitekey="{{ config('services.turnstile.site_key', env('CLOUDFLARE_TURNSTILE_SITE_KEY')) }}" 
+                             data-callback="turnstileCallback">
+                        </div>
+                    </div>
+                </div>
+
+                <script>
+                    function turnstileCallback(token) {
+                        @this.set('turnstileToken', token);
+                    }
+                </script>
 
                 <div class="mt-5 xl:mt-6">
                     <x-filament-panels::form.actions

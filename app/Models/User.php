@@ -2,12 +2,13 @@
 
 namespace App\Models;
 
-use Filament\Models\Contracts\FilamentUser; // Ambil kontrak Filament
-use Filament\Panel; // Jalur kelas Panel
+use Filament\Models\Contracts\FilamentUser; 
+use Filament\Panel;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-class User extends Authenticatable implements FilamentUser // Tambahkan implements FilamentUser
+class User extends Authenticatable implements FilamentUser 
 {
     use Notifiable;
 
@@ -34,12 +35,24 @@ class User extends Authenticatable implements FilamentUser // Tambahkan implemen
         'akses_menu' => 'json',
     ];
 
-    /**
-     * Mengatur hak akses user untuk masuk ke Panel Filament.
-     */
+
+
     public function canAccessPanel(Panel $panel): bool
     {
-        // Berikan izin akses jika user memiliki email admin atau kolom meja_tugas berisi 'Admin'
-        return str_ends_with($this->email, '@posyandu.com') || $this->meja_tugas === 'Admin';
+        return str_ends_with($this->email, '@posyandu.com') 
+            || $this->meja_tugas === 'superadmin' 
+            || !is_null($this->meja_pelayanan_id);
+    }
+
+
+    public function posyandu(): BelongsTo
+    {
+        return $this->belongsTo(MasterPosyandu::class, 'posyandu_id');
+    }
+
+
+    public function mejaPelayanan(): BelongsTo
+    {
+        return $this->belongsTo(MejaPelayanan::class, 'meja_pelayanan_id');
     }
 }

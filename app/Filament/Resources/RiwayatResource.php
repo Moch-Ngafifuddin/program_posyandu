@@ -18,97 +18,83 @@ use Illuminate\Support\Facades\URL;
 class RiwayatResource extends Resource
 {
     protected static ?string $model = Pasien::class;
-
     protected static ?string $navigationIcon = 'heroicon-o-document-magnifying-glass';
-
     protected static ?string $navigationLabel = 'Cek Riwayat Pengukuran';
-
     protected static ?string $navigationGroup = 'Pelayanan';
-
     protected static ?int $navigationSort = 3;
-
     public static function table(Table $table): Table
     {
         return $table
-        ->modifyQueryUsing(fn ($query) => $query->with('pemeriksaanBayi'))
+            ->modifyQueryUsing(fn ($query) => $query->with(['riwayatKelahiran', 'posyandu'])) 
             ->columns([
-                // 1. Kolom No (Nomor Urut Otomatis)
                 Tables\Columns\TextColumn::make('no')
                     ->label('No')
                     ->rowIndex(),
 
-                // 2. Kolom NIK
                 Tables\Columns\TextColumn::make('nik')
                     ->label('NIK')
                     ->searchable()
                     ->sortable(),
 
-                // 3. Kolom Nama Pasien
                 Tables\Columns\TextColumn::make('nama')
                     ->label('Nama')
                     ->searchable()
                     ->sortable()
                     ->weight('semibold'),
 
-                // 4. Kolom Jenis Kelamin (JK)
                 Tables\Columns\TextColumn::make('jenis_kelamin')
                     ->label('JK')
                     ->alignCenter(),
 
-                // 5. Kolom Tanggal Lahir (Format: DD-MM-YYYY)
                 Tables\Columns\TextColumn::make('tgl_lahir')
                     ->label('Tgl Lahir')
                     ->date('d-m-Y')
                     ->sortable(),
 
-                // 6. Kolom Nama Orang Tua (Mengambil data nama_ibu dari model pasien)
                 Tables\Columns\TextColumn::make('nama_ibu')
                     ->label('Nama Ortu')
                     ->searchable()
                     ->placeholder('-'),
 
-                // 7. Kolom Provinsi (Diambil dinamis dari akun petugas yang sedang login)
-                Tables\Columns\TextColumn::make('prov')
+                Tables\Columns\TextColumn::make('provinsi')
                     ->label('Prov')
-                    ->state(fn () => auth()->user()?->provinsi ?? '-'),
+                    ->searchable()
+                    ->placeholder('-'),
 
-                // 8. Kolom Kab/Kota (Diambil dinamis dari akun petugas yang sedang login)
-                Tables\Columns\TextColumn::make('kab_kota')
+                Tables\Columns\TextColumn::make('kabupaten')
                     ->label('Kab/Kota')
-                    ->state(fn () => auth()->user()?->kabupaten_kota ?? '-'),
+                    ->searchable()
+                    ->placeholder('-'),
 
-                // 9. Kolom Kecamatan (Diambil dinamis dari akun petugas yang sedang login)
-                Tables\Columns\TextColumn::make('kec')
+                Tables\Columns\TextColumn::make('kecamatan')
                     ->label('Kec')
-                    ->state(fn () => auth()->user()?->kecamatan ?? '-'),
+                    ->searchable()
+                    ->placeholder('-'),
 
-                // 10. Kolom Puskesmas (Diambil dinamis dari akun petugas yang sedang login)
-                Tables\Columns\TextColumn::make('puskesmas')
-                    ->label('Puskesmas')
-                    ->state(fn () => auth()->user()?->nama_puskesmas ?? '-'),
-
-                // 11. Kolom Desa/Kel (Diambil dinamis dari akun petugas yang sedang login)
-                Tables\Columns\TextColumn::make('desa_kel')
+                Tables\Columns\TextColumn::make('desa_kelurahan')
                     ->label('Desa/Kel')
-                    ->state(fn () => auth()->user()?->desa_kelurahan ?? '-'),
+                    ->searchable()
+                    ->placeholder('-'),
 
-                // 12. Kolom Posyandu (Diambil dinamis dari akun petugas yang sedang login)
-                Tables\Columns\TextColumn::make('posyandu')
+                Tables\Columns\TextColumn::make('posyandu.nama_puskesmas')
+                    ->label('Puskesmas')
+                    ->searchable()
+                    ->placeholder('-'),
+
+                Tables\Columns\TextColumn::make('posyandu.nama_posyandu')
                     ->label('Posyandu')
-                    ->state(fn () => auth()->user()?->nama_posyandu ?? '-'),
+                    ->searchable()
+                    ->placeholder('-'),
             ])
-            ->actions([
-                // Tombol Edit Bawaan
-                Tables\Actions\EditAction::make(),
     
-                // 1. Action Riwayat Tabel (Sudah Aman & Ringan)
+            ->actions([
+
                 Tables\Actions\Action::make('lihatRiwayat')
                     ->label('Riwayat Tabel')
                     ->icon('heroicon-m-clock')
                     ->color('info')
                     ->modalHeading(fn (Pasien $record) => "Arsip Rekam Medis: {$record->nama}")
                     ->modalWidth('7xl') 
-                    // 🟢 PERBAIKAN 1: Gunakan fungsi penutupan fn() agar data riwayat tidak di-load sebelum diklik
                     ->modalContent(fn (Pasien $record) => view('filament.pages.cek-riwayat', [
                         'pasien' => $record,
                         'pemeriksaan' => $record->pemeriksaanBayi()->orderBy('tgl_periksa', 'desc')->get(),
@@ -116,7 +102,6 @@ class RiwayatResource extends Resource
                     ->modalSubmitAction(false)
                     ->modalCancelActionLabel('Tutup'),
 
-                // 2. Action Kirim WA (Sudah Defensif & Anti-Freeze)
                 Tables\Actions\Action::make('kirim_wa')
                     ->label('Kirim PDF via WA')
                     ->icon('heroicon-o-paper-airplane')
@@ -158,14 +143,12 @@ class RiwayatResource extends Resource
                         }
                     }),
     
-                // 3. Action Grafik KMS Balita (🔴 SUMBER UTAMA LOOPING MEMORI SEBELUMNYA)
                 Tables\Actions\Action::make('lihatKms')
                     ->label('Grafik KMS')
                     ->modalHeading(fn (Pasien $record) => "Grafik KMS Personal: {$record->nama}")
                     ->icon('heroicon-o-book-open') 
                     ->color('success')
                     ->modalWidth('4xl')
-                    // 🟢 PERBAIKAN 2: Bungkus pemanggilan view ke dalam fungsi penutupan murni fn() agar Livewire tidak merender grafik di balik layar sebelum tombol diklik!
                     ->modalContent(fn (Pasien $record) => view('filament.pages.cek-riwayat-layout', [
                         'getRecord' => fn () => $record,
                     ]))
@@ -183,12 +166,12 @@ class RiwayatResource extends Resource
 
     public static function canAccess(): bool
     {
-        $user = Auth::user();
+        $user = \Illuminate\Support\Facades\Auth::user();
         
-        if (is_null($user) || $user->email === 'admin@posyandu.com' || $user->meja_tugas === 'superadmin' || $user->mejaPelayanan?->kode_meja === 'superadmin') {
+        if (is_null($user) || $user->email === 'admin@posyandu.com' || $user->meja_tugas === 'superadmin') {
             return true;
         }
-        
+
         return in_array('riwayats', $user->akses_menu ?? []);
     }
 }

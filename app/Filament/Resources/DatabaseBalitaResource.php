@@ -37,22 +37,21 @@ class DatabaseBalitaResource extends Resource
     {
         return $table
             ->modifyQueryUsing(fn (Builder $query) => $query
-                ->with(['latestPemeriksaan'])
+                ->with(['posyandu', 'latestPemeriksaan'])
                 ->where('is_arsip', 0)
             )
             ->headerActions([
                 Tables\Actions\Action::make('export_excel')
-                    ->label('Export Excel')
-                    ->icon('heroicon-o-document-text')
-                    ->color('success')
-                    ->action(function ($livewire) {
-                        $records = $livewire->getFilteredTableQuery()->with(['pasien'])->get();
-                        return \Maatwebsite\Excel\Facades\Excel::download(
-                            new \App\Exports\DatabaseBalitaExport($records), 
-                            'database_balita_' . now()->format('Ymd_His') . '.xlsx'
-                        );
-                    }),
-
+                ->label('Export Excel')
+                ->icon('heroicon-o-document-text')
+                ->color('success')
+                ->action(function ($livewire) {
+                    $records = $livewire->getFilteredTableQuery()->with(['posyandu', 'latestPemeriksaan.intervensiKlinis'])->get();
+                    return \Maatwebsite\Excel\Facades\Excel::download(
+                        new \App\Exports\DatabaseBalitaExport($records), 
+                        'database_balita_' . now()->format('Ymd_His') . '.xlsx'
+                    );
+                }),
                 Tables\Actions\Action::make('import_excel')
                     ->label('Import Excel')
                     ->icon('heroicon-o-arrow-up-tray')
@@ -74,11 +73,7 @@ class DatabaseBalitaResource extends Resource
                         $storageDisk = \Illuminate\Support\Facades\Storage::disk('local');
                         
                         if (!$storageDisk->exists($data['file_excel'])) {
-                            Notification::make()
-                                ->title('File Tidak Ditemukan')
-                                ->body('Sistem gagal mendeteksi letak penyimpanan sementara berkas excel.')
-                                ->danger()
-                                ->send();
+                            Notification::make()->title('File Tidak Ditemukan')->danger()->send();
                             return;
                         }
 
@@ -86,22 +81,10 @@ class DatabaseBalitaResource extends Resource
 
                         try {
                             \Maatwebsite\Excel\Facades\Excel::import(new \App\Imports\PasienImport, $filePath);
-
                             $storageDisk->delete($data['file_excel']);
-
-                            Notification::make()
-                                ->title('Proses Import Sukses!')
-                                ->body('Seluruh data balita berhasil di-enkripsi casting AES-256 dan disimpan.')
-                                ->success()
-                                ->send();
-
+                            Notification::make()->title('Proses Import Sukses!')->success()->send();
                         } catch (\Exception $e) {
-                            Notification::make()
-                                ->title('Gagal Melakukan Import')
-                                ->body('Terjadi kesalahan format atau database: ' . $e->getMessage())
-                                ->danger()
-                                ->persistent()
-                                ->send();
+                            Notification::make()->title('Gagal Import')->description($e->getMessage())->danger()->send();
                         }
                     }),
     
@@ -110,7 +93,7 @@ class DatabaseBalitaResource extends Resource
                     ->icon('heroicon-o-document-arrow-down')
                     ->color('danger')
                     ->action(function ($livewire) {
-                        $records = $livewire->getFilteredTableQuery()->with(['pasien'])->get();
+                        $records = $livewire->getFilteredTableQuery()->with(['posyandu'])->get();
 
                         $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('pdf.database-balita', [
                             'records' => $records,
@@ -123,7 +106,7 @@ class DatabaseBalitaResource extends Resource
                         );
                     }),
     
-                Tables\Actions\Action::make('kirim_wa_massal')
+                    Tables\Actions\Action::make('kirim_wa_massal')
                     ->label('Kirim WA')
                     ->icon('heroicon-o-paper-airplane')
                     ->color('primary')
@@ -136,47 +119,39 @@ class DatabaseBalitaResource extends Resource
                             ->maxLength(15),
                     ])
                     ->modalHeading('Kirim Rekap Database via WhatsApp Gateway')
-                    ->modalDescription('Masukkan nomor WhatsApp tujuan. Sistem akan mengirimkan pesan otomatis melalui API Fonnte.')
-                    ->modalSubmitActionLabel('Kirim via Fonnte')
+                    ->modalDescription('Masukkan nomor WhatsApp tujuan.')
                     ->action(function ($livewire, array $data) {
                         $baseQuery = $livewire->getFilteredTableQuery();
-
+                
                         $activeFilters = $livewire->tableFilters;
-                        $statusGizi = $activeFilters['status_gizi']['value'] ?? null;
-                        $statusStunting = $activeFilters['status_stunting']['value'] ?? null;
-                        $dariTanggal = $activeFilters['tgl_periksa_range']['dari_tanggal'] ?? null;
+                        $dariTanggal   = $activeFilters['tgl_periksa_range']['dari_tanggal'] ?? null;
                         $sampaiTanggal = $activeFilters['tgl_periksa_range']['sampai_tanggal'] ?? null;
-
-                        $linkDownload = \Illuminate\Support\Facades\URL::temporarySignedRoute(
-                            'download.excel.wa',
-                            now()->addHours(24),
-                            [
-                                'status_gizi' => $statusGizi,
-                                'status_stunting' => $statusStunting,
-                                'dari' => $dariTanggal,
-                                'sampai' => $sampaiTanggal,
-                            ]
-                        );
-
+                        $filteredBulan = $dariTanggal ? date('m', strtotime($dariTanggal)) : date('m');
+                        $filteredTahun = $dariTanggal ? date('Y', strtotime($dariTanggal)) : date('Y');
+                        $linkDownload = route('download.excel.wa', [
+                            'bulan' => $filteredBulan,
+                            'tahun' => $filteredTahun,
+                        ]);
+                
                         $total      = (clone $baseQuery)->count();
-                        $giziBuruk  = (clone $baseQuery)->where('status_gizi', 'Gizi Buruk')->count();
-                        $bbKurang   = (clone $baseQuery)->where('status_gizi', 'Gizi Kurang')->count();
-                        $giziNormal = (clone $baseQuery)->where('status_gizi', 'Gizi Baik (Normal)')->count();
-                        $bbLebih    = (clone $baseQuery)->where('status_gizi', 'Risiko Berat Badan Lebih')->count();
-                        $pendek     = (clone $baseQuery)->whereIn('status_stunting', ['Pendek', 'Sangat Pendek'])->count();
-
+                        $giziBuruk  = (clone $baseQuery)->whereHas('latestPemeriksaan', fn($sub) => $sub->where('status_gizi', 'Berat Badan Sangat Kurang'))->count();
+                        $bbKurang   = (clone $baseQuery)->whereHas('latestPemeriksaan', fn($sub) => $sub->where('status_gizi', 'Berat Badan Kurang'))->count();
+                        $giziNormal = (clone $baseQuery)->whereHas('latestPemeriksaan', fn($sub) => $sub->where('status_gizi', 'Berat Badan Normal'))->count();
+                        $bbLebih    = (clone $baseQuery)->whereHas('latestPemeriksaan', fn($sub) => $sub->where('status_gizi', 'Risiko Berat Badan Lebih'))->count();
+                        $pendek     = (clone $baseQuery)->whereHas('latestPemeriksaan', fn($sub) => $sub->whereIn('status_stunting', ['Pendek (Stunted)', 'Sangat Pendek (Severely Stunted)']))->count();
+                
                         $pesan = "*NOTIFIKASI REKAP DATABASE BALITA*\n";
                         $pesan .= "Tanggal Penarikan: " . now()->format('d-m-Y H:i') . " WIB\n";
                         $pesan .= "Posyandu: " . (auth()->user()?->nama_posyandu ?? '-') . "\n";
                         $pesan .= "----------------------------------------\n";
                         $pesan .= "Jumlah Balita Terfilter: *{$total} Anak*\n\n";
-
+                
                         $pesan .= "*Rincian Kasus Gizi (BB/U):*\n";
                         $pesan .= "• Gizi Buruk: {$giziBuruk} Anak\n";
                         $pesan .= "• BB Kurang (Gizi Kurang): {$bbKurang} Anak\n";
                         $pesan .= "• BB Normal: {$giziNormal} Anak\n";
                         $pesan .= "• Risiko Obesitas: {$bbLebih} Anak\n\n";
-
+                
                         $pesan .= "*Rincian Kasus Stunting (TB/U):*\n";
                         $pesan .= "• Pendek/Stunting: {$pendek} Anak\n";
                         $pesan .= "----------------------------------------\n";
@@ -184,17 +159,17 @@ class DatabaseBalitaResource extends Resource
                         $pesan .= $linkDownload . "\n";
                         $pesan .= "----------------------------------------\n";
                         $pesan .= "_Pesan ini otomatis di kirim oleh Sistem Pelayanan Posyandu._";
-
+                
                         $kirim = \App\Services\LayananFonnte::kirimPesan($data['nomor_wa_admin'], $pesan);
-
+                
                         if ($kirim) {
-                            Notification::make() 
+                            \Filament\Notifications\Notification::make() 
                                 ->title('Berhasil Terkirim!')
                                 ->body('Laporan rekapitulasi beserta link download Excel sukses dikirim.')
                                 ->success()
                                 ->send();
                         } else {
-                            Notification::make()
+                            \Filament\Notifications\Notification::make()
                                 ->title('Pengiriman Gagal')
                                 ->body('Gagal menghubungi API Fonnte. Periksa token Anda di file .env.')
                                 ->danger()
@@ -211,7 +186,6 @@ class DatabaseBalitaResource extends Resource
                 Tables\Columns\TextColumn::make('nik')
                     ->label('NIK')
                     ->searchable(query: function ($query, $search) {
-                        // Mempertahankan logika pencarian NIK terenkripsi di latar belakang
                         $query->orWhere('nik_hash', hash_hmac('sha256', $search, config('app.key')));
                     })
                     ->fontFamily('mono'),
@@ -233,26 +207,28 @@ class DatabaseBalitaResource extends Resource
                     ->label('Nama Ibu')
                     ->searchable(),
 
-            
-                // 🟢 SINKRONISASI UTAMA: Mengambil data wilayah langsung dari relasi master_posyandu milik pasien
-                Tables\Columns\TextColumn::make('posyandu.provinsi')
+                Tables\Columns\TextColumn::make('provinsi')
                     ->label('Prov')
+                    ->searchable()
                     ->placeholder('-'),
             
-                Tables\Columns\TextColumn::make('posyandu.kabupaten_kota')
+                Tables\Columns\TextColumn::make('kabupaten')
                     ->label('Kab/Kota')
+                    ->searchable()
                     ->placeholder('-'),
             
-                Tables\Columns\TextColumn::make('posyandu.kecamatan')
+                Tables\Columns\TextColumn::make('kecamatan')
                     ->label('Kec')
+                    ->searchable()
+                    ->placeholder('-'),
+
+                Tables\Columns\TextColumn::make('desa_kelurahan')
+                    ->label('Desa/Kel')
+                    ->searchable()
                     ->placeholder('-'),
             
                 Tables\Columns\TextColumn::make('posyandu.nama_puskesmas')
                     ->label('Puskesmas')
-                    ->placeholder('-'),
-            
-                Tables\Columns\TextColumn::make('posyandu.desa_kelurahan')
-                    ->label('Desa/Kel')
                     ->placeholder('-'),
             
                 Tables\Columns\TextColumn::make('posyandu.nama_posyandu')
@@ -265,9 +241,9 @@ class DatabaseBalitaResource extends Resource
                 SelectFilter::make('status_gizi')
                     ->label('Kategori Gizi (BB/U)')
                     ->options([
-                        'Gizi Buruk' => 'Gizi Buruk',
-                        'Gizi Kurang' => 'Gizi Kurang',
-                        'Gizi Baik (Normal)' => 'Gizi Baik (Normal)',
+                        'Berat Badan Sangat Kurang' => 'Berat Badan Sangat Kurang',
+                        'Berat Badan Kurang' => 'Berat Badan Kurang',
+                        'Berat Badan Normal' => 'Berat Badan Normal',
                         'Risiko Berat Badan Lebih' => 'Risiko Berat Badan Lebih',
                     ])
                     ->query(fn (Builder $query, array $data) => $query->when(
@@ -306,12 +282,13 @@ class DatabaseBalitaResource extends Resource
                     }),
             ])
             ->actions([
-                Tables\Actions\EditAction::make()
+                Tables\Actions\Action::make('edit_utama')
                     ->label('Edit')
                     ->icon('heroicon-o-pencil-square')
                     ->color('success')
-                    ->modalHeading('Ubah Identitas Utama Balita')
-                    ->modalWidth('2xl'),
+                    ->url(fn (\App\Models\Pasien $record): string => 
+                        \App\Filament\Resources\PasienResource::getUrl('edit', ['record' => $record->id])
+                    ),
 
                 Tables\Actions\Action::make('hapus_atau_arsip')
                     ->label('Hapus')
@@ -402,12 +379,12 @@ class DatabaseBalitaResource extends Resource
 
     public static function canAccess(): bool
     {
-        $user = Auth::user();
+        $user = \Illuminate\Support\Facades\Auth::user();
         
-        if (is_null($user) || $user->email === 'admin@posyandu.com' || $user->meja_tugas === 'superadmin' || $user->mejaPelayanan?->kode_meja === 'superadmin') {
+        if (is_null($user) || $user->email === 'admin@posyandu.com' || $user->meja_tugas === 'superadmin') {
             return true;
         }
-        
+
         return in_array('database-balitas', $user->akses_menu ?? []);
     }
 }

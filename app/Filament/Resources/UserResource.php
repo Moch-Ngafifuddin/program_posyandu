@@ -2,7 +2,6 @@
 
 namespace App\Filament\Resources;
 
-
 use App\Filament\Resources\UserResource\Pages;
 use App\Models\User;
 use Filament\Forms;
@@ -26,33 +25,44 @@ class UserResource extends Resource
     {
         return $form
             ->schema([
-                // 🔐 SEKSI 1: INFORMASI AKUN & PENUGASAN MEJA
                 Forms\Components\Section::make('Informasi Akun')
-                    ->schema([
-                        Forms\Components\TextInput::make('name')
-                            ->label('Nama Lengkap')
-                            ->required(),
-                        Forms\Components\TextInput::make('email')
-                            ->email()
-                            ->required()
-                            ->unique('users', 'email', ignoreRecord: true),
-                        Forms\Components\TextInput::make('password')
-                            ->label('Kata Sandi')
-                            ->password()
-                            ->dehydrateStateUsing(fn ($state) => Hash::make($state))
-                            ->dehydrated(fn ($state) => filled($state))
-                            ->required(fn (string $context): bool => $context === 'create'),
-                            
-                        // 🟢 FIX 1: Memasukkan komponen meja ke dalam kontainer grid agar tata letaknya rapi sejajar
-                        Forms\Components\Select::make('meja_pelayanan_id')
-                            ->label('Penugasan Meja Pelayanan')
-                            ->relationship('mejaPelayanan', 'nama_meja')
-                            ->searchable()
-                            ->preload()
-                            ->required(),
-                    ])->columns(2),
+                ->schema([
+                    Forms\Components\TextInput::make('name')
+                        ->label('Nama Lengkap')
+                        ->required(),
+                    Forms\Components\TextInput::make('email')
+                        ->email()
+                        ->required()
+                        ->unique('users', 'email', ignoreRecord: true),
+                        
+                    Forms\Components\TextInput::make('password')
+                        ->label('Kata Sandi')
+                        ->password()
+                        ->dehydrateStateUsing(fn ($state) => filled($state) ? \Illuminate\Support\Facades\Hash::make($state) : null)
+                        ->dehydrated(fn ($state) => filled($state))
+                        ->required(fn (string $context): bool => $context === 'create')
+                        ->placeholder(fn (string $context): bool => $context === 'edit' ? 'Kosongkan jika tidak ingin mengubah kata sandi' : ''),
 
-                // 🎛️ SEKSI 2: OTORISASI HAK AKSES MENU DINAMIS
+                    Forms\Components\Select::make('meja_pelayanan_id')
+                        ->label('Meja Pelayanan')
+                        ->relationship('mejaPelayanan', 'nama_meja') 
+                        ->placeholder('Pilih meja pelayanan tugas kader')
+                        ->required()
+                        ->live() 
+                        ->afterStateUpdated(function ($state, Forms\Set $set) {
+                            if (! $state) {
+                                $set('meja_tugas', null);
+                                return;
+                            }
+                    
+                            $meja = \App\Models\MejaPelayanan::find($state);
+                            $set('meja_tugas', $meja ? $meja->kode_meja : null);
+                        }),
+
+                    Forms\Components\Hidden::make('meja_tugas')
+                        ->dehydrated(true), 
+                    ]),
+
                 Forms\Components\Section::make('Hak Akses Menu')
                     ->description('Centang menu yang boleh diakses petugas ini secara spesifik')
                     ->schema([
@@ -75,53 +85,94 @@ class UserResource extends Resource
                             ->gridDirection('row'),
                     ]),
                 
-                // 📍 SEKSI 3: KONFIGURASI LOKASI LAYANAN POSYANDU
                 Forms\Components\Section::make('Konfigurasi Wilayah Kerja & Pelayanan')
-                    ->description('Data ini akan digunakan secara otomatis sebagai identitas wilayah pada rekam medis dan menu Cek Riwayat.')
+                    ->description('Pilih instansi posyandu untuk memetakan wilayah kerja rekam medis secara otomatis.')
                     ->icon('heroicon-o-map-pin')
                     ->schema([
+                        
+                        Forms\Components\Select::make('posyandu_id')
+                            ->label('Unit Posyandu Tugas')
+                            ->relationship('posyandu', 'nama_posyandu')
+                            ->placeholder('Pilih Posyandu tempat penugasan...')
+                            ->required()
+                            ->live()
+                            ->columnSpanFull()
+                            ->afterStateUpdated(function ($state, Forms\Set $set) {
+                                if (! $state) {
+                                    $set('provinsi', null);
+                                    $set('kabupaten_kota', null);
+                                    $set('kecamatan', null);
+                                    $set('desa_kelurahan', null);
+                                    $set('nama_puskesmas', null);
+                                    $set('nama_posyandu', null);
+                                    return;
+                                }
+
+                                $masterPosyandu = \App\Models\MasterPosyandu::find($state);
+                                if ($masterPosyandu) {
+                                    $set('provinsi', $masterPosyandu->provinsi);
+                                    $set('kabupaten_kota', $masterPosyandu->kabupaten_kota);
+                                    $set('kecamatan', $masterPosyandu->kecamatan);
+                                    $set('desa_kelurahan', $masterPosyandu->desa_kelurahan);
+                                    $set('nama_puskesmas', $masterPosyandu->nama_puskesmas);
+                                    $set('nama_posyandu', $masterPosyandu->nama_posyandu);
+                                }
+                            }),
+
                         Forms\Components\Grid::make(2)
                             ->schema([
                                 Forms\Components\TextInput::make('provinsi')
                                     ->label('Provinsi')
-                                    ->placeholder('Contoh: JAWA TENGAH')
+                                    ->placeholder('Otomatis terisi...')
                                     ->required()
+                                    ->readOnly()
+                                    ->dehydrated()
                                     ->maxLength(100),
-    
+                
                                 Forms\Components\TextInput::make('kabupaten_kota')
                                     ->label('Kabupaten / Kota')
-                                    ->placeholder('Contoh: KABUPATEN BANYUMAS')
+                                    ->placeholder('Otomatis terisi...')
                                     ->required()
+                                    ->readOnly()
+                                    ->dehydrated()
                                     ->maxLength(100),
                             ]),
-    
+                
                         Forms\Components\Grid::make(2)
                             ->schema([
                                 Forms\Components\TextInput::make('kecamatan')
                                     ->label('Kecamatan')
-                                    ->placeholder('Contoh: KEMBARAN')
+                                    ->placeholder('Otomatis terisi...')
                                     ->required()
+                                    ->readOnly()
+                                    ->dehydrated()
                                     ->maxLength(100),
-    
+                
                                 Forms\Components\TextInput::make('desa_kelurahan')
                                     ->label('Desa / Kelurahan')
-                                    ->placeholder('Contoh: TAMBAKSARI KIDUL')
+                                    ->placeholder('Otomatis terisi...')
                                     ->required()
+                                    ->readOnly()
+                                    ->dehydrated()
                                     ->maxLength(100),
                             ]),
-    
+                
                         Forms\Components\Grid::make(2)
                             ->schema([
                                 Forms\Components\TextInput::make('nama_puskesmas')
                                     ->label('Nama Puskesmas')
-                                    ->placeholder('Contoh: KEMBARAN I')
+                                    ->placeholder('Otomatis terisi...')
                                     ->required()
+                                    ->readOnly()
+                                    ->dehydrated()
                                     ->maxLength(100),
-    
+                
                                 Forms\Components\TextInput::make('nama_posyandu')
                                     ->label('Nama Posyandu')
-                                    ->placeholder('Contoh: ANYELIR')
+                                    ->placeholder('Otomatis terisi...')
                                     ->required()
+                                    ->readOnly()
+                                    ->dehydrated()
                                     ->maxLength(100),
                             ]),
                     ])
@@ -143,12 +194,16 @@ class UserResource extends Resource
                     ->copyable()
                     ->searchable(),
 
-                // 🟢 Menampilkan info meja tugas saat ini di baris tabel manajemen
                 Tables\Columns\TextColumn::make('mejaPelayanan.nama_meja')
                     ->label('Penugasan Meja')
                     ->badge()
                     ->color('info')
                     ->placeholder('Belum Diatur'),
+
+                Tables\Columns\TextColumn::make('nama_posyandu')
+                    ->label('Wilayah Kerja')
+                    ->placeholder('-')
+                    ->searchable(),
 
                 Tables\Columns\TextColumn::make('created_at')
                     ->label('Dibuat Sejak')
@@ -174,15 +229,14 @@ class UserResource extends Resource
         ];
     }
 
-
-    public static function shouldRegisterNavigation(): bool
+    public static function canAccess(): bool
     {
-        $user = Auth::user();
+        $user = \Illuminate\Support\Facades\Auth::user();
         
-        if (is_null($user) || $user->email === 'admin@posyandu.com' || $user->meja_tugas === 'superadmin' || $user->mejaPelayanan?->kode_meja === 'superadmin') {
+        if (is_null($user) || $user->email === 'admin@posyandu.com' || $user->meja_tugas === 'superadmin') {
             return true;
         }
-        
+
         return in_array('users', $user->akses_menu ?? []);
     }
 }

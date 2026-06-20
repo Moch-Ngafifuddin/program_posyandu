@@ -17,6 +17,8 @@ use App\Jobs\ProsesKirimWa;
 use Carbon\Carbon;
 use Filament\Forms\Get;
 use Filament\Forms\Set;
+use Filament\Forms;
+use Filament\Forms\Components\TimePicker;
 
 class KirimWaMassal extends Page implements \Filament\Forms\Contracts\HasForms
 {
@@ -53,22 +55,18 @@ class KirimWaMassal extends Page implements \Filament\Forms\Contracts\HasForms
                             ])
                             ->required(),
 
-                        // 1. Pilih Template Menggunakan Select Component yang Reaktif
                         Select::make('template_pesan_id')
                             ->label('Gunakan Template Master')
-                            ->options(TemplatePesan::all()->pluck('nama_template', 'id')) // Ambil data dari tabel SQL
+                            ->options(TemplatePesan::all()->pluck('nama_template', 'id')) 
                             ->placeholder('Kustom (Ketik Manual)')
-                            ->live() // 🟢 Membuat komponen ini reaktif secara real-time
+                            ->live() 
                             ->afterStateUpdated(function (?string $state, Set $set) {
-                                // 🟢 Jalankan pencarian otomatis ketika template dipilih
                                 if ($state) {
                                     $template = TemplatePesan::find($state);
                                     if ($template) {
-                                        // Tembakkan isi_pesan dari database ke input teks bernama 'isi_pesan'
                                         $set('isi_pesan', $template->isi_pesan); 
                                     }
                                 } else {
-                                    // Jika dikosongkan (pilih kustom), kosongkan kotak input pesan
                                     $set('isi_pesan', null);
                                 }
                             }),
@@ -78,20 +76,25 @@ class KirimWaMassal extends Page implements \Filament\Forms\Contracts\HasForms
                             ->default(now())
                             ->required(),
 
+                        Forms\Components\TimePicker::make('jam_mulai')
+                            ->label('Jam Mulai Pelayanan')
+                            ->native(false)
+                            ->format('H:i')
+                            ->required(),
+
                         TextInput::make('lokasi_kegiatan')
                             ->label('Lokasi Pelayanan / Posyandu')
                             ->placeholder('Contoh: Gedung Olahraga Bancarkembar')
                             ->required(),
 
-                        // 2. 🟢 SATU INPUTAN PESAN UTAMA: Terintegrasi dengan Template & Variabel Dinamis
                         Textarea::make('isi_pesan')
                             ->label('Struktur Isi Pesan Siaran WhatsApp')
                             ->placeholder('Ketik pesan di sini atau pilih dari template master di atas...')
                             ->helperText('Anda bisa menggunakan kode placeholder otomatis: {nama}, {tanggal}, dan {lokasi} untuk mempermudah isi pesan.')
                             ->rows(8)
                             ->required()
-                            ->columnSpan('full'), // Membuat kotak pesan melebar penuh agar rapi
-                    ])->columns(2), // 🟢 Penutup Section yang benar sekarang ada di sini
+                            ->columnSpan('full'), 
+                    ])->columns(2), 
             ])
             ->statePath('data');
     }
@@ -105,22 +108,20 @@ class KirimWaMassal extends Page implements \Filament\Forms\Contracts\HasForms
         $tanggalFormat = Carbon::parse($formData['tanggal_kegiatan'])->translatedFormat('l, d F Y');
         $lokasiFormat = $formData['lokasi_kegiatan'];
 
-        // 1. Inisialisasi Query Pasien Aktif
-        $query = Pasien::query()->where('is_arsip', 0);
+        $user = auth()->user();
+        $query = Pasien::query()
+            ->where('is_arsip', 0)
+            ->where('posyandu_id', $user?->posyandu_id ?? 1);
 
-        // 2. SOLUSI BUG 1: Memproses Filter Kategori Sesuai Pilihan UI
         if ($kategori !== 'semua') {
-            // Catatan: Sesuaikan nama kolom penanda kategori pada tabel pasien Anda (misal: 'kategori' atau 'jenis_pasien')
-            $query->where('kategori', $kategori); 
         }
 
-        // Ambil pasien yang nomor HP-nya tidak kosong
         $pasiens = $query->whereNotNull('no_hp')->where('no_hp', '!=', '')->get();
 
         if ($pasiens->count() === 0) {
             Notification::make()
                 ->title('Gagal Mengirim')
-                ->body('Tidak ditemukan nomor HP aktif untuk kategori target tersebut di database.')
+                ->body('Tidak ditemukan nomor HP balita aktif untuk wilayah posyandu Anda saat ini.')
                 ->danger()
                 ->send();
             return;
@@ -129,11 +130,13 @@ class KirimWaMassal extends Page implements \Filament\Forms\Contracts\HasForms
         $totalAntrean = 0;
         
         foreach ($pasiens as $pasien) {
-            $pesanFinal = str_replace('{nama}', $pasien->nama, $pesanMentah);
+            $jamFormat = Carbon::parse($formData['jam_mulai'])->format('H:i');
+            $pesanFinal = str_replace('{nama_ibu}', $pasien->nama_ibu ?? 'Ibu', $pesanMentah);
+            $pesanFinal = str_replace('{nama_balita}', $pasien->nama, $pesanFinal);
             $pesanFinal = str_replace('{tanggal}', $tanggalFormat, $pesanFinal);
             $pesanFinal = str_replace('{lokasi}', $lokasiFormat, $pesanFinal);
+            $pesanFinal = str_replace('{jam_mulai}', $jamFormat, $pesanFinal);
 
-            // SOLUSI BUG 2: Alihkan dari synchronous API ke Queue Job Asinkronus
             ProsesKirimWa::dispatch($pasien->no_hp, $pesanFinal);
             $totalAntrean++;
         }
@@ -141,7 +144,7 @@ class KirimWaMassal extends Page implements \Filament\Forms\Contracts\HasForms
         if ($totalAntrean > 0) {
             Notification::make()
                 ->title('Berhasil Masuk Antrean!')
-                ->body("Sebanyak {$totalAntrean} pesan WhatsApp dijadwalkan dalam sistem antrean background job.")
+                ->body("Sebanyak {$totalAntrean} pesan siaran berhasil ditembak ke sistem Queue secara real-time.")
                 ->success()
                 ->send();
 
@@ -153,7 +156,7 @@ class KirimWaMassal extends Page implements \Filament\Forms\Contracts\HasForms
     {
         $user = Auth::user();
         
-        if (is_null($user) || $user->email === 'admin@posyandu.com' || $user->meja_tugas === 'superadmin' || $user->mejaPelayanan?->kode_meja === 'superadmin') {
+        if (is_null($user) || $user->email === 'admin@posyandu.com' || $user->meja_tugas === 'superadmin') {
             return true;
         }
         

@@ -15,6 +15,7 @@ use Filament\Tables\Table;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TimePicker;
+use Illuminate\Database\Eloquent\Builder;
 
 class JadwalPosyanduResource extends Resource
 {
@@ -24,17 +25,19 @@ class JadwalPosyanduResource extends Resource
     protected static ?string $navigationGroup = 'Pelayanan';
 
     public static function form(Form $form): Form
-    {
-        return $form
-            ->schema([
-                Forms\Components\Section::make('Agenda & Penjadwalan Siaran Otomatis')
-                    ->description('Tentukan jadwal kegiatan posyandu. Sistem akan menyiarkan pesan pengingat ke WhatsApp target pada H-1 acara.')
-                    ->schema([
-                        Forms\Components\TextInput::make('judul_agenda')
-                            ->label('Nama Kegiatan / Agenda')
-                            ->required()
-                            ->placeholder('Contoh: Pelaksanaan Posyandu & Imunisasi Balita rutin')
-                            ->columnSpan('full'), 
+{
+    return $form
+        ->schema([
+            Forms\Components\Section::make('Agenda & Penjadwalan Siaran Otomatis')
+                ->schema([
+                    Forms\Components\Hidden::make('posyandu_id')
+                        ->default(fn () => auth()->user()?->posyandu_id),
+
+                    Forms\Components\TextInput::make('judul_agenda')
+                        ->label('Nama Kegiatan / Agenda')
+                        ->required()
+                        ->placeholder('Contoh: Pelaksanaan Posyandu & Imunisasi Balita rutin')
+                        ->columnSpan('full'), 
                         
                         Forms\Components\TextInput::make('tempat_acara')
                             ->label('Lokasi Tempat Pelaksanaan')
@@ -74,13 +77,12 @@ class JadwalPosyanduResource extends Resource
                             ->displayFormat('H:i')
                             ->seconds(false),
 
-                        // 🟢 FIX QC N+1 & SINKRONISASI KOLOM: Menggunakan 'template_id' sesuai isi Model fillable
                         Select::make('template_id')
                             ->label('Gunakan Template Pesan Master')
-                            ->relationship('templatePesan', 'nama_template') // Menggunakan jalur relasi resmi Filament (Anti N+1)
+                            ->relationship('templatePesan', 'nama_template') 
                             ->placeholder('Kustom (Ketik Manual)')
                             ->searchable()
-                            ->preload() // Memuat data secara efisien di latar belakang
+                            ->preload()
                             ->live() 
                             ->afterStateUpdated(function (?string $state, Set $set) {
                                 if ($state) {
@@ -110,8 +112,13 @@ class JadwalPosyanduResource extends Resource
     public static function table(Table $table): Table
     {
         return $table
-            // 🟢 FIX QC N+1 LIST VIEW: Mengunci Eager Loading ke fungsi relasi CamelCase murni
-            ->modifyQueryUsing(fn ($query) => $query->with(['templatePesan'])) 
+            ->modifyQueryUsing(function (Builder $query) {
+                $user = auth()->user();
+                if ($user && $user->meja_tugas !== 'superadmin' && $user->email !== 'admin@posyandu.com') {
+                    $query->where('posyandu_id', $user->posyandu_id);
+                }
+                $query->with(['templatePesan', 'posyandu']);
+            })
             
             ->columns([
                 Tables\Columns\TextColumn::make('index')
@@ -130,7 +137,6 @@ class JadwalPosyanduResource extends Resource
                     ->date('d-m-Y')
                     ->sortable(),
 
-                // 🟢 FIX QC DISPLAY: Memanggil struktur camelCase yang sudah ter-eager-load
                 Tables\Columns\TextColumn::make('templatePesan.nama_template')
                     ->label('Template Master')
                     ->default('Kustom (Ketik Manual)')
@@ -165,16 +171,14 @@ class JadwalPosyanduResource extends Resource
                     ])
             ])
 
-            // 🟢 TOMBOL AKSI BARIS (Hapus Satuan yang Benar)
             ->actions([
-                Tables\Actions\EditAction::make(), // Tombol Edit bawaan Anda
+                Tables\Actions\EditAction::make(), 
                 Tables\Actions\DeleteAction::make() 
                     ->modalHeading('Hapus Jadwal Posyandu')
                     ->modalDescription('Apakah Anda yakin ingin menghapus jadwal agenda ini? Tindakan ini tidak dapat dibatalkan.')
-                    // 🟢 PERBAIKAN: Gunakan fungsi bawaan Filament yang tepat di bawah ini
                     ->modalSubmitActionLabel('Ya, Hapus Data'), 
             ])
-            // TOMBOL AKSI MASSAL (Hapus Banyak Data Sekaligus)
+            
             ->bulkActions([
                 Tables\Actions\BulkActionGroup::make([
                     Tables\Actions\DeleteBulkAction::make()
@@ -195,12 +199,12 @@ class JadwalPosyanduResource extends Resource
 
     public static function canAccess(): bool
     {
-        $user = Auth::user();
+        $user = \Illuminate\Support\Facades\Auth::user();
         
-        if (is_null($user) || $user->email === 'admin@posyandu.com' || $user->meja_tugas === 'superadmin' || $user->mejaPelayanan?->kode_meja === 'superadmin') {
+        if (is_null($user) || $user->email === 'admin@posyandu.com' || $user->meja_tugas === 'superadmin') {
             return true;
         }
-        
+
         return in_array('jadwal-posyandus', $user->akses_menu ?? []);
     }
 }

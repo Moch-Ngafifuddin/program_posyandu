@@ -7,31 +7,27 @@ use App\Models\Pasien;
 use App\Models\MasterBbu;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
+use App\Exports\PemeriksaanBayiExport; 
+use Maatwebsite\Excel\Facades\Excel;
 
 class LaporanPdfController extends Controller
 {
-    /**
-     * 🟢 SINKRON: Mengunduh Laporan Resmi Bulanan + Grafik KMS PDF
-     */
+
     public function downloadLaporan($id)
     {
-        // 1. Ambil data pemeriksaan spesifik dengan Eager Loading relasi baru
         $pemeriksaanUtama = PemeriksaanBayi::with(['pasien.posyandu', 'intervensiKlinis'])->findOrFail($id);
         $pasien = $pemeriksaanUtama->pasien;
 
-        // 2. Ambil seluruh riwayat pertumbuhan anak ini beserta data intervensinya
         $semuaRiwayat = PemeriksaanBayi::with('intervensiKlinis')
             ->where('pasien_id', $pasien->id)
             ->orderBy('usia_bulan', 'asc')
             ->get();
 
-        // 3. Ambil Master Data Standar Antropometri Kemenkes (BB/U) sesuai jenis kelamin anak
         $masterKms = MasterBbu::where('jenis_kelamin', $pasien->jenis_kelamin)
             ->whereBetween('umur_bulan', [0, 12]) 
             ->orderBy('umur_bulan', 'asc')
             ->get();
 
-        // 4. Muat view PDF
         $pdf = Pdf::loadView('pdf.laporan', [
             'pemeriksaanUtama' => $pemeriksaanUtama,
             'pasien'           => $pasien,
@@ -40,5 +36,32 @@ class LaporanPdfController extends Controller
         ]);
 
         return $pdf->stream("Laporan_Tumbuh_Kembang_{$pasien->nama}.pdf");
+    }
+
+
+    public function downloadExcelWa(Request $request)
+    {
+        $bulan  = $request->query('bulan');
+        $tahun  = $request->query('tahun');
+        $minggu = $request->query('minggu');
+    
+        return Excel::download(
+            new \App\Exports\PemeriksaanBayiExport($bulan, $tahun, $minggu), 
+            'laporan-pemeriksaan-balita.xlsx'
+        );
+    }
+
+
+    public function downloadKmsPersonal($id)
+    {
+        $pasien = Pasien::findOrFail($id);
+        $riwayat = PemeriksaanBayi::where('pasien_id', $id)->orderBy('usia_bulan', 'asc')->get();
+
+        $pdf = Pdf::loadView('pdf.kms_personal', [
+            'pasien' => $pasien,
+            'riwayat' => $riwayat
+        ]);
+
+        return $pdf->download("KMS_Personal_{$pasien->nama}.pdf");
     }
 }

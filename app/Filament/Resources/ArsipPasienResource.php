@@ -20,25 +20,28 @@ class ArsipPasienResource extends Resource
     protected static ?string $navigationLabel = 'Arsip Pasien';
     protected static ?string $pluralModelLabel = 'Arsip Pasien';
     protected static ?string $modelLabel = 'Arsip Pasien';
-    
-    // 🛠️ LANGSUNG DIKUNCI KE KELOMPOK PELAYANAN
     protected static ?string $navigationGroup = 'Pelayanan';
     protected static ?int $navigationSort = 5;
 
     public static function form(Form $form): Form
     {
-        return $form->schema([]); // Kosongkan karena di arsip tidak ada input data baru
+        return $form->schema([]); 
     }
 
     public static function table(Table $table): Table
     {
         return $table
-            // KUNCI UTAMA: Hanya mengambil data pasien yang sudah diarsipkan
-            ->modifyQueryUsing(fn ($query) => $query->where('is_arsip', true))
+            ->modifyQueryUsing(fn ($query) => $query->where('is_arsip', true)->with(['kondisiKhusus']))
             ->columns([
+                Tables\Columns\TextColumn::make('index')
+                    ->label('No')
+                    ->rowIndex()
+                    ->alignCenter(),
+
                 Tables\Columns\TextColumn::make('nik')
                     ->label('NIK')
-                    ->searchable(),
+                    ->searchable()
+                    ->fontFamily('mono'),
                 
                 Tables\Columns\TextColumn::make('nama')
                     ->label('Nama Balita')
@@ -47,49 +50,49 @@ class ArsipPasienResource extends Resource
                 
                 Tables\Columns\TextColumn::make('jenis_kelamin')
                     ->label('JK')
-                    ->badge()
-                    ->colors(['info' => 'L', 'danger' => 'P']),
+                    ->alignCenter(),
 
                 Tables\Columns\TextColumn::make('status_arsip')
-                    ->label('Status/Alasan')
+                    ->label('Status / Alasan')
                     ->badge()
-                    ->state(function ($record) {
-                        return $record->tgl_meninggal ? 'Meninggal Dunia' : 'Pindah Domisili/Puskesmas';
+                    ->state(function (Pasien $record) {
+                        $kondisi = $record->kondisiKhusus;
+                        return ($kondisi && $kondisi->tgl_meninggal) ? 'Meninggal Dunia' : 'Pindah Domisili';
                     })
                     ->colors([
                         'danger' => 'Meninggal Dunia',
-                        'warning' => 'Pindah Domisili/Puskesmas',
+                        'warning' => 'Pindah Domisili',
                     ]),
 
                 Tables\Columns\TextColumn::make('detail_kondisi')
                     ->label('Detail Informasi Arsip')
                     ->wrap()
-                    ->state(function ($record) {
-                        if ($record->tgl_meninggal) {
-                            return "Wafat: " . \Carbon\Carbon::parse($record->tgl_meninggal)->format('d/m/Y') . 
-                                   " | Penyebab: " . ($record->penyebab_meninggal ?? '-') . 
-                                   " | Makam: " . ($record->tempat_pemakaman ?? '-');
+                    ->state(function (Pasien $record) {
+                        $kondisi = $record->kondisiKhusus;
+                        
+                        if ($kondisi && $kondisi->tgl_meninggal) {
+                            return "Wafat: " . \Carbon\Carbon::parse($kondisi->tgl_meninggal)->format('d/m/Y') . 
+                                   " | Penyebab: " . ($kondisi->penyebab_meninggal ?? '-') . 
+                                   " | Makam: " . ($kondisi->tempat_pemakaman ?? '-');
                         }
-                        return "Ket. Pindah: " . ($record->keterangan_pindah ?? '-');
+                        
+                        return "Ket. Pindah: " . ($kondisi->keterangan_pindah ?? '-');
                     }),
             ])
             ->actions([
-                // Tombol Pulihkan
                 Tables\Actions\Action::make('pulihkan')
                     ->label('Pulihkan')
                     ->icon('heroicon-o-arrow-path')
                     ->color('success')
                     ->requiresConfirmation()
                     ->modalHeading('Pulihkan Data Pasien?')
-                    ->modalDescription('Pasien ini akan dikembalikan ke dalam daftar Data Balita aktif.')
-                    ->action(function ($record) {
+                    ->modalDescription('Pasien ini akan dikembalikan ke dalam daftar Data Balita aktif dan seluruh catatan arsip kondisi khusus akan dibersihkan.')
+                    ->action(function (Pasien $record) {
                         $record->update([
                             'is_arsip' => false,
-                            'keterangan_pindah' => null,
-                            'tgl_meninggal' => null,
-                            'penyebab_meninggal' => null,
-                            'tempat_pemakaman' => null,
                         ]);
+
+                        $record->kondisiKhusus()->delete();
 
                         \Filament\Notifications\Notification::make()
                             ->title('Pasien Dipulihkan')
@@ -108,14 +111,16 @@ class ArsipPasienResource extends Resource
         ];
     }
 
+
     public static function canAccess(): bool
     {
-        $user = Auth::user();
+        $user = \Illuminate\Support\Facades\Auth::user();
         
-        if (is_null($user) || $user->email === 'admin@posyandu.com' || $user->meja_tugas === 'superadmin' || $user->mejaPelayanan?->kode_meja === 'superadmin') {
+        if (is_null($user) || $user->email === 'admin@posyandu.com' || $user->meja_tugas === 'superadmin') {
             return true;
         }
-        
+
         return in_array('arsip-pasiens', $user->akses_menu ?? []);
     }
+
 }

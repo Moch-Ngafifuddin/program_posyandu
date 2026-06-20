@@ -23,7 +23,7 @@ class PemeriksaanImport implements ToModel, WithHeadingRow
 
         $pasien = Pasien::where('nik_hash', $nikHashFinal)->first();
         if (!$pasien) {
-            return null; // Abaikan jika data anak belum terdaftar di sistem
+            return null; 
         }
 
         try {
@@ -32,11 +32,9 @@ class PemeriksaanImport implements ToModel, WithHeadingRow
             $tglPeriksa = Carbon::today()->format('Y-m-d');
         }
 
-        // Cari jadwal kegiatan aktif terdekat atau hari ini
         $jadwal = JadwalPosyandu::whereDate('tanggal_acara', $tglPeriksa)->first() 
                   ?? JadwalPosyandu::latest()->first();
 
-        // 1. Buat Rekam Fisik Utama Pemeriksaan
         $pemeriksaan = PemeriksaanBayi::create([
             'pasien_id'         => $pasien->id,
             'jadwal_id'         => $jadwal?->id ?? null,
@@ -51,7 +49,6 @@ class PemeriksaanImport implements ToModel, WithHeadingRow
             'lingkar_kepala'    => !empty($row['lingkar_kepala']) ? (float)$row['lingkar_kepala'] : null,
         ]);
 
-        // 2. Buat Rekam Intervensi Klinis ke sub-tabel barunya
         $pemeriksaan->intervensiKlinis()->create([
             'pitting_edema'   => $row['pitting_edema'] ?? 'tidak ada',
             'vitamin_a'       => isset($row['vitamin_a']) && (strtolower($row['vitamin_a']) == 'ya' || $row['vitamin_a'] == 1) ? 1 : 0,

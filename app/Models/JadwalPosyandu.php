@@ -10,6 +10,7 @@ class JadwalPosyandu extends Model
     protected $table = 'jadwal_posyandu';
 
     protected $fillable = [
+        'posyandu_id', 
         'judul_agenda',
         'tempat_acara',
         'kategori_target',
@@ -24,5 +25,10 @@ class JadwalPosyandu extends Model
     public function templatePesan(): BelongsTo
     {
         return $this->belongsTo(TemplatePesan::class, 'template_id');
+    }
+
+    public function posyandu(): BelongsTo
+    {
+        return $this->belongsTo(MasterPosyandu::class, 'posyandu_id');
     }
 }

@@ -33,11 +33,23 @@ class TemplatePesanResource extends Resource
                             ->required()
                             ->maxLength(255),
 
-                        Forms\Components\Textarea::make('isi_pesan')
+                            Forms\Components\Textarea::make('isi_pesan')
                             ->label('Isi Pesan WhatsApp')
-                            ->placeholder("Gunakan teks kustom Anda. Contoh:\nHalo Ibu, besok pagi jam 08.00 WIB...")
-                            ->rows(8)
-                            ->required(),
+                            ->placeholder("Halo Ibu {nama_ibu}, besok pagi jam {jam_mulai} WIB diharapkan membawa {nama_balita} ke lokasi {lokasi}...")
+                            ->required()
+                            ->rows(6)
+                            ->helperText(new \Illuminate\Support\HtmlString("
+                                <div class='mt-2 p-2 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 text-xs text-gray-600 dark:text-gray-400'>
+                                    <span class='font-bold text-primary-600 block mb-1'>💡 Kode Token Dinamis Otomatis Yang Didukung Sistem:</span>
+                                    <ul class='list-disc pl-4 space-y-0.5'>
+                                        <li><code class='bg-white dark:bg-gray-900 px-1 py-0.5 rounded font-mono border'>{nama_balita}</code> - Mengganti otomatis nama anak balita target.</li>
+                                        <li><code class='bg-white dark:bg-gray-900 px-1 py-0.5 rounded font-mono border'>{nama_ibu}</code> - Mengganti otomatis nama Ibu/Wali (Default jika kosong: 'Ibu').</li>
+                                        <li><code class='bg-white dark:bg-gray-900 px-1 py-0.5 rounded font-mono border'>{tanggal}</code> - Hari dan tanggal jalannya kegiatan posyandu (H-1).</li>
+                                        <li><code class='bg-white dark:bg-gray-900 px-1 py-0.5 rounded font-mono border'>{lokasi}</code> - Tempat lokasi berlangsungnya acara posyandu.</li>
+                                        <li><code class='bg-white dark:bg-gray-900 px-1 py-0.5 rounded font-mono border'>{jam_mulai}</code> - Jam/waktu dimulainya timbangan pelayanan.</li>
+                                    </ul>
+                                </div>
+                            ")),
                     ])
             ]);
     }
@@ -54,7 +66,7 @@ class TemplatePesanResource extends Resource
 
                 Tables\Columns\TextColumn::make('isi_pesan')
                     ->label('Potongan Isi Pesan')
-                    ->limit(70) // Memotong teks panjang agar tabel tetap rapi
+                    ->limit(70)
                     ->searchable(),
 
                 Tables\Columns\TextColumn::make('updated_at')
@@ -85,12 +97,12 @@ class TemplatePesanResource extends Resource
 
     public static function canAccess(): bool
     {
-        $user = Auth::user();
+        $user = \Illuminate\Support\Facades\Auth::user();
         
-        if (is_null($user) || $user->email === 'admin@posyandu.com' || $user->meja_tugas === 'superadmin' || $user->mejaPelayanan?->kode_meja === 'superadmin') {
+        if (is_null($user) || $user->email === 'admin@posyandu.com' || $user->meja_tugas === 'superadmin') {
             return true;
         }
-        
+
         return in_array('template-pesans', $user->akses_menu ?? []);
     }
 }

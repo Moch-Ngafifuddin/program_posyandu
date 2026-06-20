@@ -12,6 +12,7 @@ use Filament\PanelProvider;
 use Filament\Support\Colors\Color;
 use Filament\Widgets;
 use Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse;
+use Filament\Http\Responses\Auth\Contracts\LoginResponse;
 use Illuminate\Cookie\Middleware\EncryptCookies;
 use Illuminate\Foundation\Http\Middleware\VerifyCsrfToken;
 use Illuminate\Routing\Middleware\SubstituteBindings;
@@ -21,18 +22,18 @@ use App\Models\Pengaturan;
 use App\Filament\Pages\Auth\CustomLogin;
 use Illuminate\Support\HtmlString;
 use Illuminate\Support\Facades\Schema;
+use Filament\View\PanelsRenderHook;
+use Illuminate\Support\Facades\Blade;
 
 class AdminPanelProvider extends PanelProvider
 {
     public function panel(Panel $panel): Panel
     {
-        // 🟢 LANGKAH AMAN: Inisialisasi nilai default agar tidak crash saat migrasi awal
         $logoUrl = asset('logo_kecil.svg');
         $namaPuskesmas = 'Sistem Informasi Posyandu';
         $textLogo = '';
         $tinggiLogoUtama = '2.5rem';
 
-        // Pengecekan database yang aman dari resiko infinite loop
         try {
             if (Schema::hasTable('pengaturan')) {
                 $pengaturan = Pengaturan::first();
@@ -44,7 +45,6 @@ class AdminPanelProvider extends PanelProvider
                 }
             }
         } catch (\Throwable $e) {
-            // Abaikan eror jika database belum siap
         }
 
         return $panel
@@ -62,10 +62,8 @@ class AdminPanelProvider extends PanelProvider
                 'gray'    => Color::Slate,
             ])
             
-            // Mengunci nama brand utama
             ->brandName($namaPuskesmas) 
 
-            // Render logo dan teks kustom di samping gambar logo
             ->brandLogo(new \Illuminate\Support\HtmlString("
                 <div class='flex items-center gap-3 py-1'>
                     <img src='{$logoUrl}' alt='Logo' style='height: {$tinggiLogoUtama}; width: auto; object-fit: contain;' />
@@ -77,13 +75,6 @@ class AdminPanelProvider extends PanelProvider
                 </div>
             "))
             ->brandLogoHeight($tinggiLogoUtama)
-            
-            // 🟢 SOLUSI AMAN JUDUL TAB: Gunakan renderHook hanya untuk menyuntikkan judul awal secara statis
-            // TANPA JavaScript MutationObserver yang memicu loop tabrakan dengan Livewire
-            ->renderHook(
-                'panels::head.end',
-                fn () => new \Illuminate\Support\HtmlString("<title>" . e($namaPuskesmas) . "</title>")
-            )
             
             ->databaseNotifications()
             ->discoverResources(in: app_path('Filament/Resources'), for: 'App\\Filament\\Resources')
@@ -105,6 +96,37 @@ class AdminPanelProvider extends PanelProvider
             ])
             ->authMiddleware([
                 Authenticate::class,
-            ]); 
+            ])
+            
+            ->renderHook(
+                PanelsRenderHook::AUTH_LOGIN_FORM_AFTER,
+                fn () => Blade::render('
+                    <script src="https://www.google.com/recaptcha/api.js?render={{ env("CAPTCHA_SITE_KEY") }}"></script>
+                    <script>
+                        document.addEventListener("DOMContentLoaded", function() {
+                            const form = document.querySelector("form");
+                            if (form) {
+                                form.addEventListener("submit", function(e) {
+                                    e.preventDefault();
+                                    grecaptcha.ready(function() {
+                                        grecanccha = grecaptcha.execute("{{ env("CAPTCHA_SITE_KEY") }}", {action: "login"}).then(function(token) {
+                                            let input = document.createElement("input");
+                                            input.setAttribute("type", "hidden");
+                                            input.setAttribute("name", "g-recaptcha-response");
+                                            input.setAttribute("value", token);
+                                            form.appendChild(input);
+                                            form.submit();
+                                        });
+                                    });
+                                });
+                            }
+                        });
+                    </script>
+                ')
+            )
+            ->renderHook(
+                'panels::head.end',
+                fn () => new \Illuminate\Support\HtmlString("<title>" . e($namaPuskesmas) . "</title>")
+            );
     }
 }

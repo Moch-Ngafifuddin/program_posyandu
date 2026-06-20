@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use App\Helpers\AntropometriHelper;
+use App\Models\IntervensiKlinis;
 
 class PemeriksaanBayi extends Model
 {
@@ -55,10 +56,9 @@ class PemeriksaanBayi extends Model
         return $this->belongsTo(User::class, 'petugas_id');
     }
 
-    // Relasi Baru ke Intervensi Klinis (Pecahan kolom intervensi lama)
-    public function intervensiKlinis(): HasOne
+    public function intervensiKlinis(): \Illuminate\Database\Eloquent\Relations\HasOne
     {
-        return $this->hasOne(PemeriksaanIntervensiKlinis::class, 'pemeriksaan_bayi_id');
+        return $this->hasOne(IntervensiKlinis::class, 'pemeriksaan_bayi_id'); 
     }
 
     protected static function booted()
@@ -90,6 +90,12 @@ class PemeriksaanBayi extends Model
         static::saving(function ($model) {
             $pasien = $model->pasien ?? Pasien::find($model->pasien_id);
             
+            if ($model->pasien_id && $model->usia_bulan !== null && $model->berat_badan) {
+                $hasilKbm = AntropometriHelper::hitungKBM($model->pasien_id, $model->usia_bulan, (float) $model->berat_badan);
+                $model->kenaikan_bb = $hasilKbm['kenaikan_bb'];
+                $model->keterangan_bb = $hasilKbm['keterangan_bb'];
+            }
+
             if ($pasien && $model->berat_badan && $model->tinggi_badan) {
                 $tbKoreksi = (float) $model->tinggi_badan;
                 if ($model->usia_bulan < 24 && $model->cara_ukur == 'berdiri') {

@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use App\Models\MasterPosyandu;
 
 class Pasien extends Model
 {
@@ -32,6 +33,12 @@ class Pasien extends Model
         'nik_ibu',
         'pendidikan_pekerjaan_ibu',
         'is_arsip',
+        'provinsi',
+        'kabupaten',
+        'kecamatan',
+        'desa_kelurahan',
+        'nama_puskesmas',
+        'nama_posyandu',
     ];
     
     protected $casts = [
@@ -42,19 +49,17 @@ class Pasien extends Model
         'nik_ayah' => 'encrypted',
     ];
 
-    // Relasi ke Master Posyandu
     public function posyandu(): BelongsTo
     {
         return $this->belongsTo(MasterPosyandu::class, 'posyandu_id');
+        
     }
 
-    // Relasi ke Riwayat Kelahiran (Tabel Terpisah Baru)
     public function riwayatKelahiran(): HasOne
     {
         return $this->hasOne(PasienRiwayatKelahiran::class, 'pasien_id');
     }
 
-    // Relasi ke Kondisi Khusus (Tabel Terpisah Baru)
     public function kondisiKhusus(): HasOne
     {
         return $this->hasOne(PasienKondisiKhusus::class, 'pasien_id');
@@ -72,18 +77,22 @@ class Pasien extends Model
 
     protected static function booted()
     {
-        static::saving(function ($pasien) {
-            if ($pasien->isDirty('nik')) {
-                $pasien->nik_hash = $pasien->nik ? hash_hmac('sha256', $pasien->nik, config('app.key')) : null;
-            }
-        });
-
         static::addGlobalScope('posyandu_filter', function (\Illuminate\Database\Eloquent\Builder $builder) {
             if (auth()->check()) {
                 $user = auth()->user();
                 if ($user->posyandu_id) {
                     $builder->where('posyandu_id', $user->posyandu_id);
                 }
+            }
+        });
+
+        static::saving(function ($pasien) {
+            $nikMentah = $pasien->getAttributes()['nik'] ?? null;
+
+            if ($nikMentah) {
+                $pasien->nik_hash = hash_hmac('sha256', $nikMentah, config('app.key'));
+            } else {
+                $pasien->nik_hash = '-'; 
             }
         });
     }

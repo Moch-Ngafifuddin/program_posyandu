@@ -20,9 +20,7 @@ class PasienRiwayatKelahiran extends Model
         'riwayat_asi',
     ];
 
-    /**
-     * Relasi balik ke data induk Pasien
-     */
+
     public function pasien(): BelongsTo
     {
         return $this->belongsTo(Pasien::class, 'pasien_id');
